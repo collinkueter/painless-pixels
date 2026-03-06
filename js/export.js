@@ -28,7 +28,7 @@ const Exporter = {
    * @returns {Promise<void>}           — triggers ZIP download when done
    */
   async run(opts) {
-    const { slides, device, templateId, bgState, textState, onProgress } = opts;
+    const { slides, device, templateId, bgState, textState, layoutState, onProgress } = opts;
     const tmpl    = Templates.getById(templateId);
     const specs   = Devices.EXPORT_SPECS;
     const total   = slides.length * specs.length;
@@ -53,7 +53,7 @@ const Exporter = {
         if (onProgress) onProgress(current, total, `${spec.label} — slide ${si + 1}`);
 
         const blob = await this._renderSlide({
-          spec, device, tmpl, bgState, textState, screenshotImg, frameImg,
+          spec, device, tmpl, bgState, textState, layoutState, screenshotImg, frameImg,
         });
 
         if (blob) {
@@ -73,9 +73,10 @@ const Exporter = {
 
   // ── Per-slide renderer ────────────────────────────────────────────────────
 
-  async _renderSlide({ spec, device, tmpl, bgState, textState, screenshotImg, frameImg }) {
+  async _renderSlide({ spec, device, tmpl, bgState, textState, layoutState, screenshotImg, frameImg }) {
     const W = spec.w;
     const H = spec.h;
+    const ls = layoutState || {};
 
     // Always use HTMLCanvas — OffscreenCanvas doesn't inherit document fonts
     const canvas = document.createElement('canvas');
@@ -83,22 +84,30 @@ const Exporter = {
     canvas.height = H;
     const ctx = canvas.getContext('2d');
 
+    // Resolve effective phone position (custom override or template default)
+    const phoneCX    = W * (ls.phoneXFrac != null ? ls.phoneXFrac : tmpl.phoneXFrac);
+    const phoneCY    = H * (ls.phoneYFrac != null ? ls.phoneYFrac : tmpl.phoneYFrac);
+    const phoneAngle = ls.phoneAngle || 0;
+
     // ── 1. Background ───────────────────────────────────────────────────────
     this._drawBackground(ctx, W, H, tmpl, bgState);
 
     // ── 2. Screenshot ───────────────────────────────────────────────────────
     if (screenshotImg) {
-      // Compute phone center based on template fracs
-      const phoneCX = W * tmpl.phoneXFrac;
-      const phoneCY = H * tmpl.phoneYFrac;
       const design  = Devices.DESIGN[device];
       const phonePixelScale = (W * tmpl.phoneScale) / design.w;
       const screen  = Devices.screenForPhone(device, phoneCX, phoneCY, phonePixelScale);
 
       ctx.save();
+      if (phoneAngle) {
+        ctx.translate(phoneCX, phoneCY);
+        ctx.rotate(phoneAngle * Math.PI / 180);
+        ctx.translate(-phoneCX, -phoneCY);
+      }
+
       // Clip to screen rectangle
       ctx.beginPath();
-      this._roundedRect(ctx, screen.x, screen.y, screen.w, screen.h, screen.w * 0.04);
+      this._roundedRect(ctx, screen.x, screen.y, screen.w, screen.h, screen.w * (Devices.SCREEN_CORNER[device] || 0.04));
       ctx.clip();
 
       // Cover-fit the screenshot into the screen
@@ -113,8 +122,6 @@ const Exporter = {
 
     // ── 3. Device Frame ─────────────────────────────────────────────────────
     if (frameImg) {
-      const phoneCX    = W * tmpl.phoneXFrac;
-      const phoneCY    = H * tmpl.phoneYFrac;
       const frameTargW = Math.round(W * tmpl.phoneScale);
       const frameNatW  = frameImg.naturalWidth  || frameImg.width;
       const frameNatH  = frameImg.naturalHeight || frameImg.height;
@@ -122,13 +129,17 @@ const Exporter = {
       const frameTargH = Math.round(frameTargW * frameAR);
 
       // Rasterize SVG at the correct output resolution to avoid blurry upscaling.
-      // Browsers rasterize SVGs at their natural viewBox size; drawing via a
-      // same-size intermediate canvas forces correct resolution.
       const tmpC = document.createElement('canvas');
       tmpC.width  = frameTargW;
       tmpC.height = frameTargH;
       tmpC.getContext('2d').drawImage(frameImg, 0, 0, frameTargW, frameTargH);
 
+      ctx.save();
+      if (phoneAngle) {
+        ctx.translate(phoneCX, phoneCY);
+        ctx.rotate(phoneAngle * Math.PI / 180);
+        ctx.translate(-phoneCX, -phoneCY);
+      }
       ctx.drawImage(
         tmpC,
         phoneCX - frameTargW / 2,
@@ -136,12 +147,13 @@ const Exporter = {
         frameTargW,
         frameTargH
       );
+      ctx.restore();
 
       tmpC.width = 0; // release GPU backing store
     }
 
     // ── 4 & 5. Text ─────────────────────────────────────────────────────────
-    this._drawText(ctx, W, H, tmpl, textState, device);
+    this._drawText(ctx, W, H, tmpl, textState, device, ls);
 
     // ── Export to PNG Blob ───────────────────────────────────────────────────
     return new Promise(resolve => {
@@ -184,8 +196,9 @@ const Exporter = {
 
   // ── Text ──────────────────────────────────────────────────────────────────
 
-  _drawText(ctx, W, H, tmpl, textState, device) {
+  _drawText(ctx, W, H, tmpl, textState, device, layoutState) {
     const ts        = textState || {};
+    const ls        = layoutState || {};
     const previewH  = Devices.PREVIEW[device || 'iphone'].h;
     const scale     = H / previewH;
 
@@ -193,44 +206,76 @@ const Exporter = {
     {
       const hl       = tmpl.headline;
       const text     = ts.headline || '';
-      const fontSize = ts.hlFontSize ? Math.round(ts.hlFontSize * scale)
+      let   fontSize = ts.hlFontSize ? Math.round(ts.hlFontSize * scale)
                                      : Math.round(H * hl.sizeFrac);
       const color  = ts.hlColor  || hl.color;
       const weight = ts.hlWeight || hl.weight;
       const align  = ts.hlAlign  || hl.align;
-      const x      = W * hl.xFrac;
-      const y      = H * hl.yFrac;
+      const x      = W * (ls.headlineXFrac != null ? ls.headlineXFrac : hl.xFrac);
+      const y      = H * (ls.headlineYFrac != null ? ls.headlineYFrac : hl.yFrac);
+      const angle  = ls.headlineAngle || 0;
       const maxW   = this._maxTextWidth(W, H, tmpl, hl);
+
+      ctx.save();
+      if (angle) {
+        ctx.translate(x, y);
+        ctx.rotate(angle * Math.PI / 180);
+        ctx.translate(-x, -y);
+      }
 
       ctx.font         = `${weight} ${fontSize}px 'Syne', system-ui, sans-serif`;
       ctx.fillStyle    = color;
       ctx.textAlign    = align;
       ctx.textBaseline = 'middle';
 
+      // Auto-fit: shrink if text overflows available width
+      const measuredW = ctx.measureText(text).width;
+      if (measuredW > maxW && measuredW > 0) {
+        fontSize = Math.max(10, Math.floor(fontSize * (maxW / measuredW)));
+        ctx.font = `${weight} ${fontSize}px 'Syne', system-ui, sans-serif`;
+      }
+
       const lines = this._wrapText(ctx, text, maxW);
       this._fillLines(ctx, lines, x, y, fontSize * 1.25);
+      ctx.restore();
     }
 
     // ── Subheadline ─────────────────────────────────────────────────────────
     {
       const sl       = tmpl.subheadline;
       const text     = ts.subheadline || '';
-      const fontSize = ts.slFontSize ? Math.round(ts.slFontSize * scale)
+      let   fontSize = ts.slFontSize ? Math.round(ts.slFontSize * scale)
                                      : Math.round(H * sl.sizeFrac);
       const color  = ts.slColor  || sl.color;
       const weight = ts.slWeight || sl.weight;
       const align  = ts.slAlign  || sl.align;
-      const x      = W * sl.xFrac;
-      const y      = H * sl.yFrac;
+      const x      = W * (ls.subheadlineXFrac != null ? ls.subheadlineXFrac : sl.xFrac);
+      const y      = H * (ls.subheadlineYFrac != null ? ls.subheadlineYFrac : sl.yFrac);
+      const angle  = ls.subheadlineAngle || 0;
       const maxW   = this._maxTextWidth(W, H, tmpl, sl);
+
+      ctx.save();
+      if (angle) {
+        ctx.translate(x, y);
+        ctx.rotate(angle * Math.PI / 180);
+        ctx.translate(-x, -y);
+      }
 
       ctx.font         = `${weight} ${fontSize}px 'Syne', system-ui, sans-serif`;
       ctx.fillStyle    = color;
       ctx.textAlign    = align;
       ctx.textBaseline = 'middle';
 
+      // Auto-fit: shrink if text overflows available width
+      const measuredW = ctx.measureText(text).width;
+      if (measuredW > maxW && measuredW > 0) {
+        fontSize = Math.max(10, Math.floor(fontSize * (maxW / measuredW)));
+        ctx.font = `${weight} ${fontSize}px 'Syne', system-ui, sans-serif`;
+      }
+
       const lines = this._wrapText(ctx, text, maxW);
       this._fillLines(ctx, lines, x, y, fontSize * 1.4);
+      ctx.restore();
     }
   },
 

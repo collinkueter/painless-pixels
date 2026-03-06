@@ -6,21 +6,22 @@
 
 /* ── Design Tokens ──────────────────────────────────── */
 :root {
-  --bg:          #080808;
-  --surface:     #0f0f0f;
-  --surface-2:   #161616;
-  --surface-3:   #1e1e1e;
-  --border:      #232323;
-  --border-2:    #2e2e2e;
+  --bg:          #f5f5f7;
+  --surface:     #ffffff;
+  --surface-2:   #f0f0f2;
+  --surface-3:   #e8e8ec;
+  --border:      #d8d8dc;
+  --border-2:    #c8c8cc;
   --accent:      #5b5fcf;
   --accent-2:    #818cf8;
-  --accent-dim:  rgba(91, 95, 207, 0.14);
-  --accent-glow: rgba(91, 95, 207, 0.28);
-  --text-1:      #ececec;
-  --text-2:      #aaaaaa;
-  --text-3:      #707070;
+  --accent-dim:  rgba(91, 95, 207, 0.10);
+  --accent-glow: rgba(91, 95, 207, 0.18);
+  --text-1:      #1a1a1a;
+  --text-2:      #555555;
+  --text-3:      #888888;
   --success:     #22c55e;
   --warning:     #f59e0b;
+  --canvas-bg:   #e0e0e4;
 
   --font-ui:   'Syne', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Mono', monospace;
@@ -32,6 +33,21 @@
   --sidebar-w: 252px;
   --slides-w:  190px;
   --header-h:  52px;
+}
+
+[data-theme="dark"] {
+  --bg:          #080808;
+  --surface:     #0f0f0f;
+  --surface-2:   #161616;
+  --surface-3:   #1e1e1e;
+  --border:      #232323;
+  --border-2:    #2e2e2e;
+  --accent-dim:  rgba(91, 95, 207, 0.14);
+  --accent-glow: rgba(91, 95, 207, 0.28);
+  --text-1:      #ececec;
+  --text-2:      #aaaaaa;
+  --text-3:      #707070;
+  --canvas-bg:   #0a0a0a;
 }
 
 /* ── Base ───────────────────────────────────────────── */
@@ -103,23 +119,15 @@ html, body {
 }
 
 .logo-mark-lg {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  border-radius: 14px;
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -1px;
-  color: #fff;
-  gap: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
   overflow: hidden;
   flex-shrink: 0;
 }
 
 .logo-img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -562,6 +570,37 @@ html, body {
 .field-group.half {
   flex: 1;
   margin-bottom: 0;
+}
+
+.field-group.third {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.angle-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.angle-input-wrap .field-input {
+  width: 100%;
+  padding-right: 4px;
+}
+
+.angle-suffix {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.reset-layout-btn {
+  width: 100%;
+  justify-content: center;
+  margin-top: 6px;
+  font-size: 11px;
+  padding: 5px 8px;
 }
 
 .field-row {
@@ -1095,6 +1134,70 @@ html, body {
   .step-screen {
     height: 100dvh;
   }
+}
+
+/* ── Theme Toggle ──────────────────────────────────── */
+.theme-toggle {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--border-2);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.theme-toggle:hover {
+  color: var(--text-1);
+  background: var(--surface-2);
+}
+
+.upload-theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 50;
+}
+
+.theme-toggle .icon-sun { display: none; }
+.theme-toggle .icon-moon { display: block; }
+
+[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+/* ── Save Status ───────────────────────────────────── */
+.save-status {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--success);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.save-status.visible {
+  opacity: 1;
+}
+
+/* ── Upload Open Link ──────────────────────────────── */
+.upload-open-link {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 6px 12px;
+  transition: color 0.15s;
+  font-family: var(--font-ui);
+}
+
+.upload-open-link:hover {
+  color: var(--accent-2);
 }
 
 /* ── Utility ────────────────────────────────────────── */

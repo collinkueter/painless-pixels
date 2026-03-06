@@ -33,10 +33,6 @@
     fill="#1a1a1a"
   />
 
-  <!-- Punch-hole camera -->
-  <circle cx="206" cy="58" r="8" fill="#0a0a0a"/>
-  <circle cx="206" cy="58" r="4" fill="#111111"/>
-
   <!-- Power button — right side -->
   <rect x="405" y="260" width="7" height="64" rx="3.5" fill="#2a2a2a"/>
 

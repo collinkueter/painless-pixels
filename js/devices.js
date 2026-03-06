@@ -9,30 +9,37 @@ const Devices = {
 
   // Preview canvas sizes (pixels) — same aspect ratio as DESIGN
   PREVIEW: {
-    iphone:  { w: 323, h: 700 },  // 390×845 scaled: 700/845 = 0.8284
-    ipad:    { w: 450, h: 600 },  // 1024×1366 scaled: 600/1366 = 0.4392
+    iphone:  { w: 323, h: 660 },  // 390×797 scaled to fit
+    ipad:    { w: 450, h: 583 },  // 1024×1327 scaled to fit
     android: { w: 315, h: 700 },  // 412×915 scaled: 700/915 = 0.7650
   },
 
-  // Full design dimensions
+  // Full design dimensions (match frame aspect ratios)
   DESIGN: {
-    iphone:  { w: 390,  h: 845  },
-    ipad:    { w: 1024, h: 1366 },
+    iphone:  { w: 390,  h: 797  },  // matches 1350×2760 frame AR
+    ipad:    { w: 1024, h: 1327 },  // matches 2300×2980 frame AR
     android: { w: 412,  h: 915  },
   },
 
-  // Where the screen sits inside the device frame (fractions of design dims)
-  // These match the SVG viewBox cutouts in assets/frames/
+  // Where the screen sits inside the device frame (fractions of frame dims)
+  // Measured from transparent screen cutout in frame PNGs
   SCREEN_FRACS: {
-    iphone:  { x: 0.038, y: 0.026, w: 0.923, h: 0.911 },
-    ipad:    { x: 0.045, y: 0.038, w: 0.910, h: 0.893 },
-    android: { x: 0.029, y: 0.044, w: 0.942, h: 0.912 },
+    iphone:  { x: 0.0533, y: 0.0250, w: 0.8933, h: 0.9500 },
+    ipad:    { x: 0.0548, y: 0.0416, w: 0.8904, h: 0.9168 },
+    android: { x: 0.029,  y: 0.044,  w: 0.942,  h: 0.912  },
   },
 
-  // Device frame SVG paths
+  // Screen corner radius as fraction of screen width (measured from frame PNGs)
+  SCREEN_CORNER: {
+    iphone:  0.043,
+    ipad:    0.017,
+    android: 0.04,
+  },
+
+  // Device frame image paths
   FRAME_PATH: {
-    iphone:  'assets/frames/iphone-16-pro.svg',
-    ipad:    'assets/frames/ipad-13.svg',
+    iphone:  'assets/frames/iphone.png',
+    ipad:    'assets/frames/ipad.png',
     android: 'assets/frames/android-pixel.svg',
   },
 
