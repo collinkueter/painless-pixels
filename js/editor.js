@@ -532,12 +532,11 @@ const Editor = {
   // ── Text Update ────────────────────────────────────────────────────────────
 
   updateText(state) {
-    if ('headline' in state)     this.headlineText.set('text', state.headline);
-    if ('subheadline' in state)  this.sublineText.set('text', state.subheadline);
-    if ('headlineSize' in state) this.headlineText.set('fontSize', parseInt(state.headlineSize, 10) || 38);
-    if ('textColor' in state) {
-      this.headlineText.set('fill', state.textColor);
-    }
+    if ('headline' in state)         this.headlineText.set('text', state.headline);
+    if ('subheadline' in state)      this.sublineText.set('text', state.subheadline);
+    if ('headlineSize' in state)     this.headlineText.set('fontSize', parseInt(state.headlineSize, 10) || 38);
+    if ('textColor' in state)        this.headlineText.set('fill', state.textColor);
+    if ('subheadlineColor' in state) this.sublineText.set('fill', state.subheadlineColor);
     this._autoFitText();
     this.canvas.renderAll();
   },

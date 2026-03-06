@@ -21,8 +21,9 @@
     bgSplitBottom: '#f5f5f5',
     headline:      'Your App Headline',
     subheadline:   'The perfect description',
-    headlineSize:  38,
-    textColor:     '#ffffff',
+    headlineSize:       38,
+    textColor:          '#ffffff',
+    subheadlineColor:   '#aaaaaa',
   };
 
   // ── State (initialized from DEFAULTS) ──────────────────────────────────
@@ -175,33 +176,38 @@
     State.bgSolid          = data.bgSolid;
     State.bgSplitTop       = data.bgSplitTop;
     State.bgSplitBottom    = data.bgSplitBottom;
-    State.headline         = data.headline;
-    State.subheadline      = data.subheadline;
-    State.headlineSize     = data.headlineSize;
-    State.textColor        = data.textColor;
-    State.phoneXFrac       = typeof data.phoneXFrac === 'number' ? data.phoneXFrac : null;
-    State.phoneYFrac       = typeof data.phoneYFrac === 'number' ? data.phoneYFrac : null;
-    State.phoneAngle       = typeof data.phoneAngle === 'number' ? data.phoneAngle : 0;
-    State.headlineXFrac    = typeof data.headlineXFrac === 'number' ? data.headlineXFrac : null;
-    State.headlineYFrac    = typeof data.headlineYFrac === 'number' ? data.headlineYFrac : null;
-    State.headlineAngle    = typeof data.headlineAngle === 'number' ? data.headlineAngle : 0;
-    State.subheadlineXFrac = typeof data.subheadlineXFrac === 'number' ? data.subheadlineXFrac : null;
-    State.subheadlineYFrac = typeof data.subheadlineYFrac === 'number' ? data.subheadlineYFrac : null;
-    State.subheadlineAngle = typeof data.subheadlineAngle === 'number' ? data.subheadlineAngle : 0;
+    State.headline          = data.headline;
+    State.subheadline       = data.subheadline;
+    State.headlineSize      = data.headlineSize;
+    State.textColor         = data.textColor;
+    State.subheadlineColor  = data.subheadlineColor;
+    State.phoneXFrac        = typeof data.phoneXFrac === 'number' ? data.phoneXFrac : null;
+    State.phoneYFrac        = typeof data.phoneYFrac === 'number' ? data.phoneYFrac : null;
+    State.phoneAngle        = typeof data.phoneAngle === 'number' ? data.phoneAngle : 0;
+    State.headlineXFrac     = typeof data.headlineXFrac === 'number' ? data.headlineXFrac : null;
+    State.headlineYFrac     = typeof data.headlineYFrac === 'number' ? data.headlineYFrac : null;
+    State.headlineAngle     = typeof data.headlineAngle === 'number' ? data.headlineAngle : 0;
+    State.subheadlineXFrac  = typeof data.subheadlineXFrac === 'number' ? data.subheadlineXFrac : null;
+    State.subheadlineYFrac  = typeof data.subheadlineYFrac === 'number' ? data.subheadlineYFrac : null;
+    State.subheadlineAngle  = typeof data.subheadlineAngle === 'number' ? data.subheadlineAngle : 0;
   }
 
   function syncAllControls() {
     // Text fields
-    const hlInput   = Utils.$('#headline-input');
-    const slInput   = Utils.$('#subheadline-input');
-    const sizeInput = Utils.$('#headline-size');
-    const colorEl   = Utils.$('#text-color');
-    const hexLabel  = Utils.$('#text-color-hex');
-    if (hlInput)   hlInput.value   = State.headline;
-    if (slInput)   slInput.value   = State.subheadline;
-    if (sizeInput) sizeInput.value = State.headlineSize;
-    if (colorEl)   colorEl.value   = State.textColor;
-    if (hexLabel)  hexLabel.textContent = State.textColor;
+    const hlInput    = Utils.$('#headline-input');
+    const slInput    = Utils.$('#subheadline-input');
+    const sizeInput  = Utils.$('#headline-size');
+    const colorEl    = Utils.$('#text-color');
+    const hexLabel   = Utils.$('#text-color-hex');
+    const slColorEl  = Utils.$('#subheadline-color');
+    const slHexLabel = Utils.$('#subheadline-color-hex');
+    if (hlInput)    hlInput.value          = State.headline;
+    if (slInput)    slInput.value          = State.subheadline;
+    if (sizeInput)  sizeInput.value        = State.headlineSize;
+    if (colorEl)    colorEl.value          = State.textColor;
+    if (hexLabel)   hexLabel.textContent   = State.textColor;
+    if (slColorEl)  slColorEl.value        = State.subheadlineColor;
+    if (slHexLabel) slHexLabel.textContent = State.subheadlineColor;
 
     // Layout controls
     syncLayoutControls();
@@ -483,10 +489,11 @@
     Editor.applyTemplate(State.templateId, true, getLayoutOverrides()); // skip internal renderAll
     autoTextColor();
     Editor.updateText({                           // this one calls renderAll
-      headline:    State.headline,
-      subheadline: State.subheadline,
-      headlineSize: State.headlineSize,
-      textColor:   State.textColor,
+      headline:         State.headline,
+      subheadline:      State.subheadline,
+      headlineSize:     State.headlineSize,
+      textColor:        State.textColor,
+      subheadlineColor: State.subheadlineColor,
     });
   }
 
@@ -503,14 +510,21 @@
       return;
     }
 
-    const color = Utils.isLight(dominant) ? '#111111' : '#ffffff';
-    State.textColor = color;
+    const isLight  = Utils.isLight(dominant);
+    const color    = isLight ? '#111111' : '#ffffff';
+    const subColor = isLight ? '#555555' : '#aaaaaa';
+    State.textColor        = color;
+    State.subheadlineColor = subColor;
 
-    // Sync sidebar color picker
-    const colorEl  = Utils.$('#text-color');
-    const hexLabel = Utils.$('#text-color-hex');
-    if (colorEl)  colorEl.value = color;
-    if (hexLabel) hexLabel.textContent = color;
+    // Sync sidebar color pickers
+    const colorEl    = Utils.$('#text-color');
+    const hexLabel   = Utils.$('#text-color-hex');
+    const slColorEl  = Utils.$('#subheadline-color');
+    const slHexLabel = Utils.$('#subheadline-color-hex');
+    if (colorEl)    colorEl.value          = color;
+    if (hexLabel)   hexLabel.textContent   = color;
+    if (slColorEl)  slColorEl.value        = subColor;
+    if (slHexLabel) slHexLabel.textContent = subColor;
   }
 
   // ── Device Picker ─────────────────────────────────────────────────────
@@ -546,17 +560,21 @@
   // ── Text Fields ───────────────────────────────────────────────────────
 
   function wireTextFields() {
-    const hlInput   = Utils.$('#headline-input');
-    const slInput   = Utils.$('#subheadline-input');
-    const sizeInput = Utils.$('#headline-size');
-    const colorEl   = Utils.$('#text-color');
-    const hexLabel  = Utils.$('#text-color-hex');
+    const hlInput    = Utils.$('#headline-input');
+    const slInput    = Utils.$('#subheadline-input');
+    const sizeInput  = Utils.$('#headline-size');
+    const colorEl    = Utils.$('#text-color');
+    const hexLabel   = Utils.$('#text-color-hex');
+    const slColorEl  = Utils.$('#subheadline-color');
+    const slHexLabel = Utils.$('#subheadline-color-hex');
 
     // Set initial values
     hlInput.value   = State.headline;
     slInput.value   = State.subheadline;
     sizeInput.value = State.headlineSize;
     colorEl.value   = State.textColor;
+    if (slColorEl)  slColorEl.value        = State.subheadlineColor;
+    if (slHexLabel) slHexLabel.textContent = State.subheadlineColor;
 
     hlInput.addEventListener('input', () => {
       State.headline = hlInput.value;
@@ -582,6 +600,15 @@
       debouncedTextUpdate();
       markDirty();
     });
+
+    if (slColorEl) {
+      slColorEl.addEventListener('input', () => {
+        State.subheadlineColor = slColorEl.value;
+        slHexLabel.textContent = slColorEl.value;
+        debouncedTextUpdate();
+        markDirty();
+      });
+    }
   }
 
   // ── Background Controls ───────────────────────────────────────────────
@@ -746,10 +773,11 @@
 
   const debouncedTextUpdate = Utils.debounce(() => {
     Editor.updateText({
-      headline:    State.headline,
-      subheadline: State.subheadline,
-      headlineSize: State.headlineSize,
-      textColor:   State.textColor,
+      headline:         State.headline,
+      subheadline:      State.subheadline,
+      headlineSize:     State.headlineSize,
+      textColor:        State.textColor,
+      subheadlineColor: State.subheadlineColor,
     });
   }, 150);
 
