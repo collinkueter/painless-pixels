@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 845" fill="none">
+  <!-- iPhone 16 Pro frame
+       Design canvas: 390 × 845
+       Screen area: x=15, y=14, w=360, h=778  (fracs: x=0.038, y=0.017, w=0.923, h=0.921)
+       Technique: fill-rule=evenodd cuts a transparent hole for the screen
+  -->
+
+  <!-- Outer bezel with transparent screen cutout -->
+  <path fill-rule="evenodd"
+    d="
+      M32 0
+      L358 0
+      Q390 0 390 32
+      L390 813
+      Q390 845 358 845
+      L32 845
+      Q0 845 0 813
+      L0 32
+      Q0 0 32 0
+      Z
+
+      M20 22
+      L370 22
+      Q375 22 375 27
+      L375 787
+      Q375 792 370 792
+      L20 792
+      Q15 792 15 787
+      L15 27
+      Q15 22 20 22
+      Z
+    "
+    fill="#1c1c1e"
+  />
+
+  <!-- Dynamic Island pill -->
+  <rect x="155" y="35" width="80" height="28" rx="14" fill="#0a0a0a"/>
+
+  <!-- Side buttons — right (power) -->
+  <rect x="383" y="165" width="7" height="70" rx="3.5" fill="#2a2a2e"/>
+
+  <!-- Side buttons — left (volume up) -->
+  <rect x="0" y="155" width="7" height="44" rx="3.5" fill="#2a2a2e"/>
+  <!-- Side buttons — left (volume down) -->
+  <rect x="0" y="210" width="7" height="44" rx="3.5" fill="#2a2a2e"/>
+  <!-- Side buttons — left (silent/action) -->
+  <rect x="0" y="108" width="7" height="32" rx="3.5" fill="#2a2a2e"/>
+
+  <!-- Home indicator bar -->
+  <rect x="155" y="808" width="80" height="5" rx="2.5" fill="rgba(255,255,255,0.3)"/>
+
+  <!-- Subtle inner edge highlight (top) -->
+  <path d="M20 22 L370 22 Q375 22 375 27 L375 28 Q375 23 370 23 L20 23 Q15 23 15 28 L15 27 Q15 22 20 22 Z"
+    fill="rgba(255,255,255,0.06)"/>
+
+  <!-- Outer rim highlight -->
+  <path d="M32 0.5 L358 0.5 Q389.5 0.5 389.5 32 L389.5 813 Q389.5 844.5 358 844.5 L32 844.5 Q0.5 844.5 0.5 813 L0.5 32 Q0.5 0.5 32 0.5 Z"
+    fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>
+</svg>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painless Pixels — App Store Screenshot Generator</title>
+  <link rel="icon" type="image/jpeg" href="assets/logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/editor.css">
+</head>
+<body>
+
+  <!-- ───────────────────────── STEP 1: UPLOAD ───────────────────────── -->
+  <div id="step-upload" class="step-screen active">
+    <div class="upload-hero">
+
+      <div class="upload-logo">
+        <img src="assets/logo.jpg" alt="Painless Pixels" class="logo-mark-lg logo-img">
+        <div class="logo-text-lg">
+          <span class="logo-name-lg">Painless Pixels</span>
+          <span class="logo-tagline">App Store Screenshot Generator</span>
+        </div>
+      </div>
+
+      <div class="upload-zone" id="upload-zone" tabindex="0" role="button" aria-label="Drop zone for app screenshots. Press Enter or Space to browse files.">
+        <div class="upload-zone-glow"></div>
+        <div class="upload-zone-inner">
+          <div class="upload-icon-wrap">
+            <svg class="upload-icon" width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+              <path d="M20 6V28" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M12 14L20 6L28 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6 32H34" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <h1 class="upload-title">Drop your raw app screenshots here</h1>
+          <p class="upload-subtitle">We wrap them in a branded frame and export every App Store &amp; Google Play size in one ZIP.</p>
+          <button class="btn-accent upload-browse-btn" id="browse-btn">Browse Files</button>
+          <input type="file" id="file-input" accept="image/*" multiple hidden>
+        </div>
+        <div class="upload-formats">
+          <div class="format-chip">iPhone</div>
+          <div class="format-chip">iPad</div>
+          <div class="format-chip">Android</div>
+        </div>
+      </div>
+
+      <div class="upload-footer">
+        <span class="footer-badge">No signup</span>
+        <span class="footer-sep">·</span>
+        <span class="footer-badge">No watermarks</span>
+        <span class="footer-sep">·</span>
+        <span class="footer-badge">Free forever</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ───────────────────────── STEP 2: EDITOR ───────────────────────── -->
+  <div id="step-editor" class="step-screen">
+
+    <header class="app-header">
+      <div class="header-left">
+        <div class="app-logo">
+          <img src="assets/logo.jpg" alt="Painless Pixels" class="logo-mark-sm logo-img">
+          <span class="logo-name-sm">Painless Pixels</span>
+        </div>
+        <div class="step-track" role="list" aria-label="Progress steps">
+          <div class="step-node done" role="listitem" aria-label="Step 1: Upload, complete">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M2 5L4.2 7L8 3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="step-connector done"></div>
+          <div class="step-node active" role="listitem" aria-current="step" aria-label="Step 2: Design">2</div>
+          <div class="step-connector"></div>
+          <div class="step-node" role="listitem" aria-label="Step 3: Export">3</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <button class="btn-ghost" id="add-screenshots-btn">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Add Screenshots
+        </button>
+        <button class="btn-accent" id="export-btn" aria-label="Export all sizes">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M7 1V9M7 9L4 6M7 9L10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 11H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Export All Sizes
+        </button>
+      </div>
+    </header>
+
+    <div class="editor-layout">
+
+      <!-- Left Sidebar -->
+      <aside class="sidebar" id="sidebar">
+
+        <div class="sidebar-section">
+          <div class="section-label">Device</div>
+          <div class="device-picker" role="group" aria-label="Device type">
+            <button class="device-btn active" data-device="iphone" aria-pressed="true">
+              <div class="device-thumb iphone-thumb"></div>
+              <span>iPhone</span>
+            </button>
+            <button class="device-btn" data-device="ipad" aria-pressed="false">
+              <div class="device-thumb ipad-thumb"></div>
+              <span>iPad</span>
+            </button>
+            <button class="device-btn" data-device="android" aria-pressed="false">
+              <div class="device-thumb android-thumb"></div>
+              <span>Android</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="section-label">Template</div>
+          <div class="template-grid" id="template-grid" role="group" aria-label="Templates">
+            <!-- Injected by templates.js init -->
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="section-label">Text</div>
+          <div class="field-group">
+            <label class="field-label" for="headline-input">Headline</label>
+            <input type="text" class="field-input" id="headline-input" placeholder="Your App Headline" maxlength="60">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="subheadline-input">Subheadline</label>
+            <input type="text" class="field-input" id="subheadline-input" placeholder="The perfect description" maxlength="100">
+          </div>
+          <div class="field-row">
+            <div class="field-group half">
+              <label class="field-label" for="headline-size">Font Size</label>
+              <input type="number" class="field-input mono" id="headline-size" value="38" min="10" max="120">
+            </div>
+            <div class="field-group half">
+              <label class="field-label" for="text-color">Text Color</label>
+              <div class="color-swatch-wrap">
+                <input type="color" id="text-color" value="#ffffff">
+                <span class="color-hex" id="text-color-hex">#ffffff</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="section-label">Background</div>
+          <div class="bg-toggle" role="group" aria-label="Background type">
+            <button class="bg-toggle-btn active" data-bg="gradient" aria-pressed="true">Gradient</button>
+            <button class="bg-toggle-btn" data-bg="solid" aria-pressed="false">Solid</button>
+          </div>
+
+          <div id="bg-gradient-pane" class="bg-pane active">
+            <div class="field-row">
+              <div class="field-group half">
+                <label class="field-label" for="bg-from">From</label>
+                <div class="color-swatch-wrap">
+                  <input type="color" id="bg-from" value="#6366f1">
+                  <span class="color-hex" id="bg-from-hex">#6366f1</span>
+                </div>
+              </div>
+              <div class="field-group half">
+                <label class="field-label" for="bg-to">To</label>
+                <div class="color-swatch-wrap">
+                  <input type="color" id="bg-to" value="#0a0a0a">
+                  <span class="color-hex" id="bg-to-hex">#0a0a0a</span>
+                </div>
+              </div>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="bg-angle">Angle <span id="angle-display" class="mono">135°</span></label>
+              <input type="range" class="range-input" id="bg-angle" min="0" max="360" value="135">
+            </div>
+          </div>
+
+          <div id="bg-solid-pane" class="bg-pane">
+            <div class="field-group">
+              <label class="field-label" for="bg-solid">Color</label>
+              <div class="color-swatch-wrap">
+                <input type="color" id="bg-solid" value="#6366f1">
+                <span class="color-hex" id="bg-solid-hex">#6366f1</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <input type="file" id="add-file-input" accept="image/*" multiple hidden>
+      </aside>
+
+      <!-- Canvas Area -->
+      <main class="canvas-area" id="canvas-area">
+        <div class="canvas-scroll">
+          <div class="canvas-container" id="canvas-container">
+            <div class="canvas-wrapper" id="canvas-wrapper">
+              <canvas id="main-canvas" aria-label="Screenshot preview canvas. Edit using the sidebar controls."></canvas>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Right: Slides Panel -->
+      <aside class="slides-panel">
+        <div class="slides-header">
+          <span class="section-label">Slides</span>
+          <button class="icon-btn" id="add-slide-btn" aria-label="Add screenshot">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <path d="M6 1V11M1 6H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="slides-list" id="slides-list" role="listbox" aria-label="Slides">
+          <!-- Injected by app.js -->
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- ───────────────────────── EXPORT OVERLAY ───────────────────────── -->
+  <div id="export-overlay" class="overlay hidden">
+    <div class="overlay-backdrop" id="export-backdrop"></div>
+    <div class="overlay-panel" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
+
+      <div class="overlay-header">
+        <div>
+          <h2 class="overlay-title" id="overlay-title">Export All Sizes</h2>
+          <p class="overlay-sub">Ready to generate <span id="export-slide-count">0</span> screenshots × 8 sizes</p>
+        </div>
+        <button class="overlay-close" id="export-close" aria-label="Close export panel">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 3L13 13M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="export-specs-grid">
+        <div class="spec-column">
+          <div class="spec-column-title">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M4 1H10Q11 1 11 2V12Q11 13 10 13H4Q3 13 3 12V2Q3 1 4 1Z" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+            </svg>
+            iOS App Store
+          </div>
+          <div class="spec-list">
+            <div class="spec-row"><span class="spec-name">iPhone 6.9"</span><span class="spec-dim">1260 × 2736</span></div>
+            <div class="spec-row"><span class="spec-name">iPhone 6.5"</span><span class="spec-dim">1284 × 2778</span></div>
+            <div class="spec-row"><span class="spec-name">iPad 13"</span><span class="spec-dim">2064 × 2752</span></div>
+            <div class="spec-row"><span class="spec-name">iPad 12.9"</span><span class="spec-dim">2048 × 2732</span></div>
+          </div>
+        </div>
+        <div class="spec-column">
+          <div class="spec-column-title">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 4H12Q13 4 13 5V10Q13 11 12 11H2Q1 11 1 10V5Q1 4 2 4Z" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+              <circle cx="7" cy="2" r="0.8" fill="currentColor"/>
+            </svg>
+            Google Play
+          </div>
+          <div class="spec-list">
+            <div class="spec-row"><span class="spec-name">Phone Portrait</span><span class="spec-dim">1080 × 1920</span></div>
+            <div class="spec-row"><span class="spec-name">Phone Landscape</span><span class="spec-dim">1920 × 1080</span></div>
+            <div class="spec-row"><span class="spec-name">Tablet 7"</span><span class="spec-dim">1200 × 1920</span></div>
+            <div class="spec-row"><span class="spec-name">Tablet 10"</span><span class="spec-dim">1800 × 2560</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="export-progress-wrap hidden" id="export-progress-wrap">
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-status" id="progress-status">Generating…</div>
+      </div>
+
+      <div class="export-cta" id="export-cta">
+        <div class="export-btn-row">
+          <button class="btn-accent large" id="do-export-btn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 2V10M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 13H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Download ZIP
+          </button>
+          <button class="btn-ghost large" id="copy-btn" title="Copy current slide to clipboard">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect x="1" y="4" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+              <path d="M4 4V2.5A1.5 1.5 0 0 1 5.5 1H11.5A1.5 1.5 0 0 1 13 2.5V8.5A1.5 1.5 0 0 1 11.5 10H10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            Copy
+          </button>
+        </div>
+        <p class="export-note">
+          <span id="export-file-count">0</span> PNG files &nbsp;·&nbsp; No watermarks &nbsp;·&nbsp; No signup required
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Scripts — order matters -->
+  <script src="vendor/fabric.min.js"></script>
+  <script src="vendor/jszip.min.js"></script>
+  <script src="vendor/FileSaver.min.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/devices.js"></script>
+  <script src="js/upload.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>

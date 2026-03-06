@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1366" fill="none">
+  <!-- iPad 13" frame
+       Design canvas: 1024 × 1366
+       Screen area: x=50, y=52, w=924, h=1220  (fracs ≈ 0.049, 0.038, 0.902, 0.893)
+       fill-rule=evenodd punches transparent screen hole
+  -->
+
+  <!-- Outer bezel with transparent screen cutout -->
+  <path fill-rule="evenodd"
+    d="
+      M36 0
+      L988 0
+      Q1024 0 1024 36
+      L1024 1330
+      Q1024 1366 988 1366
+      L36 1366
+      Q0 1366 0 1330
+      L0 36
+      Q0 0 36 0
+      Z
+
+      M50 52
+      L974 52
+      Q978 52 978 56
+      L978 1268
+      Q978 1272 974 1272
+      L50 1272
+      Q46 1272 46 1268
+      L46 56
+      Q46 52 50 52
+      Z
+    "
+    fill="#1c1c1e"
+  />
+
+  <!-- Front camera (center top) -->
+  <circle cx="512" cy="26" r="7" fill="#0a0a0a"/>
+  <circle cx="512" cy="26" r="3" fill="#1a1a1a"/>
+
+  <!-- Home indicator -->
+  <rect x="437" y="1285" width="150" height="5" rx="2.5" fill="rgba(255,255,255,0.28)"/>
+
+  <!-- Side buttons — top right (power) -->
+  <rect x="1010" y="260" width="14" height="80" rx="7" fill="#2a2a2e"/>
+
+  <!-- Volume buttons — right side -->
+  <rect x="1010" y="390" width="14" height="60" rx="7" fill="#2a2a2e"/>
+  <rect x="1010" y="460" width="14" height="60" rx="7" fill="#2a2a2e"/>
+
+  <!-- Outer rim highlight -->
+  <path d="M36 0.5 L988 0.5 Q1023.5 0.5 1023.5 36 L1023.5 1330 Q1023.5 1365.5 988 1365.5 L36 1365.5 Q0.5 1365.5 0.5 1330 L0.5 36 Q0.5 0.5 36 0.5 Z"
+    fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="0.5"/>
+
+  <!-- Inner edge highlight (top) -->
+  <path d="M50 52 L974 52 Q978 52 978 56 L978 57 Q978 53 974 53 L50 53 Q46 53 46 57 L46 56 Q46 52 50 52 Z"
+    fill="rgba(255,255,255,0.05)"/>
+</svg>

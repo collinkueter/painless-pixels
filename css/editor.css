@@ -1,0 +1,235 @@
+/* ═══════════════════════════════════════════════════════
+   Painless Pixels — Editor / Canvas styles
+═══════════════════════════════════════════════════════ */
+
+/* ── Canvas Area ────────────────────────────────────── */
+.canvas-area {
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* subtle crosshatch grid */
+  background-image:
+    linear-gradient(var(--surface) 1px, transparent 1px),
+    linear-gradient(90deg, var(--surface) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: -0.5px -0.5px;
+}
+
+.canvas-scroll {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-2) transparent;
+}
+
+.canvas-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.canvas-scroll::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+.canvas-scroll::-webkit-scrollbar-corner { background: transparent; }
+
+.canvas-container {
+  padding: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.canvas-wrapper {
+  position: relative;
+  border-radius: 2px;
+  /* drop shadow to make the canvas "float" */
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.3s;
+  background: #0a0a0a;
+  flex-shrink: 0;
+}
+
+.canvas-wrapper canvas {
+  display: block !important;
+}
+
+/* ── Canvas Entry Animation ─────────────────────────── */
+@keyframes canvasReveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.canvas-wrapper.loaded {
+  animation: canvasReveal 0.4s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+/* ── Upload Screen Animations ───────────────────────── */
+@keyframes uploadFadeIn {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.upload-logo    { animation: uploadFadeIn 0.5s cubic-bezier(0.2,0,0,1) 0.1s both; }
+.upload-zone    { animation: uploadFadeIn 0.5s cubic-bezier(0.2,0,0,1) 0.2s both; }
+.upload-footer  { animation: uploadFadeIn 0.5s cubic-bezier(0.2,0,0,1) 0.35s both; }
+
+/* ── Step Screen Transitions ────────────────────────── */
+@keyframes stepIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: none; }
+}
+
+#step-editor.active {
+  animation: stepIn 0.35s cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+/* ── Drag-over drop zone pulse ──────────────────────── */
+@keyframes dropPulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+  50%       { box-shadow: 0 0 0 8px transparent; }
+}
+
+.upload-zone.drag-over {
+  animation: dropPulse 1s ease infinite;
+}
+
+/* ── Slide transitions ──────────────────────────────── */
+@keyframes slideItemIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: none; }
+}
+
+.slide-item {
+  animation: slideItemIn 0.25s cubic-bezier(0.2,0,0,1) both;
+}
+
+/* ── Export overlay ─────────────────────────────────── */
+@keyframes overlayIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+.overlay-panel {
+  animation: overlayIn 0.25s cubic-bezier(0.2,0,0,1) both;
+}
+
+/* ── Canvas loading state ───────────────────────────── */
+.canvas-wrapper.loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+}
+
+/* ── Fabric.js overrides ────────────────────────────── */
+
+/* Hide Fabric.js default controls on non-interactive objects */
+.canvas-container .upper-canvas {
+  cursor: default;
+}
+
+/* ── Tooltip-style slide number badge ───────────────── */
+.slide-item .slide-number {
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ── Subtle scanline texture for dark template preview swatches ── */
+.template-swatch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0,0,0,0.04) 3px,
+    rgba(0,0,0,0.04) 4px
+  );
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* ── Progress bar shimmer ───────────────────────────── */
+@keyframes progressShimmer {
+  from { background-position: -200% center; }
+  to   { background-position: 200% center; }
+}
+
+.progress-fill.animating {
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    var(--accent-2) 40%,
+    var(--accent) 80%
+  );
+  background-size: 200% 100%;
+  animation: progressShimmer 1.5s linear infinite;
+}
+
+/* ── Reduced Motion ─────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .upload-logo,
+  .upload-zone,
+  .upload-footer {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .canvas-wrapper.loaded {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  #step-editor.active {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .upload-zone.drag-over {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  .slide-item {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .overlay-panel {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .progress-fill.animating {
+    animation: none;
+  }
+
+  .canvas-wrapper,
+  .field-input,
+  .device-btn,
+  .template-swatch,
+  .btn-accent,
+  .btn-ghost {
+    transition: none;
+  }
+}

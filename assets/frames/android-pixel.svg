@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 412 915" fill="none">
+  <!-- Android (Pixel-style) frame
+       Design canvas: 412 × 915
+       Screen area: x=12, y=40, w=388, h=835  (fracs: 0.029, 0.044, 0.942, 0.912)
+       fill-rule=evenodd punches transparent screen hole
+  -->
+
+  <!-- Outer bezel with rounded-rect transparent screen cutout (single clean path) -->
+  <path fill-rule="evenodd"
+    d="
+      M28 0
+      L384 0
+      Q412 0 412 28
+      L412 887
+      Q412 915 384 915
+      L28 915
+      Q0 915 0 887
+      L0 28
+      Q0 0 28 0
+      Z
+
+      M24 40
+      L388 40
+      Q400 40 400 52
+      L400 863
+      Q400 875 388 875
+      L24 875
+      Q12 875 12 863
+      L12 52
+      Q12 40 24 40
+      Z
+    "
+    fill="#1a1a1a"
+  />
+
+  <!-- Punch-hole camera -->
+  <circle cx="206" cy="58" r="8" fill="#0a0a0a"/>
+  <circle cx="206" cy="58" r="4" fill="#111111"/>
+
+  <!-- Power button — right side -->
+  <rect x="405" y="260" width="7" height="64" rx="3.5" fill="#2a2a2a"/>
+
+  <!-- Volume buttons — left side -->
+  <rect x="0" y="230" width="7" height="52" rx="3.5" fill="#2a2a2a"/>
+  <rect x="0" y="294" width="7" height="52" rx="3.5" fill="#2a2a2a"/>
+
+  <!-- Navigation gesture bar -->
+  <rect x="162" y="888" width="88" height="5" rx="2.5" fill="rgba(255,255,255,0.25)"/>
+
+  <!-- Outer rim highlight -->
+  <path d="M28 0.5 L384 0.5 Q411.5 0.5 411.5 28 L411.5 887 Q411.5 914.5 384 914.5 L28 914.5 Q0.5 914.5 0.5 887 L0.5 28 Q0.5 0.5 28 0.5 Z"
+    fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="0.5"/>
+</svg>
