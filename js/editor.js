@@ -535,6 +535,7 @@ const Editor = {
     if ('headline' in state)         this.headlineText.set('text', state.headline);
     if ('subheadline' in state)      this.sublineText.set('text', state.subheadline);
     if ('headlineSize' in state)     this.headlineText.set('fontSize', parseInt(state.headlineSize, 10) || 38);
+    if ('subheadlineSize' in state)  this.sublineText.set('fontSize', parseInt(state.subheadlineSize, 10) || 20);
     if ('textColor' in state)        this.headlineText.set('fill', state.textColor);
     if ('subheadlineColor' in state) this.sublineText.set('fill', state.subheadlineColor);
     this._autoFitText();

@@ -22,6 +22,7 @@
     headline:      'Your App Headline',
     subheadline:   'The perfect description',
     headlineSize:       38,
+    subheadlineSize:    20,
     textColor:          '#ffffff',
     subheadlineColor:   '#aaaaaa',
   };
@@ -179,6 +180,7 @@
     State.headline          = data.headline;
     State.subheadline       = data.subheadline;
     State.headlineSize      = data.headlineSize;
+    State.subheadlineSize   = data.subheadlineSize;
     State.textColor         = data.textColor;
     State.subheadlineColor  = data.subheadlineColor;
     State.phoneXFrac        = typeof data.phoneXFrac === 'number' ? data.phoneXFrac : null;
@@ -197,17 +199,19 @@
     const hlInput    = Utils.$('#headline-input');
     const slInput    = Utils.$('#subheadline-input');
     const sizeInput  = Utils.$('#headline-size');
+    const slSizeInput = Utils.$('#subheadline-size');
     const colorEl    = Utils.$('#text-color');
     const hexLabel   = Utils.$('#text-color-hex');
     const slColorEl  = Utils.$('#subheadline-color');
     const slHexLabel = Utils.$('#subheadline-color-hex');
-    if (hlInput)    hlInput.value          = State.headline;
-    if (slInput)    slInput.value          = State.subheadline;
-    if (sizeInput)  sizeInput.value        = State.headlineSize;
-    if (colorEl)    colorEl.value          = State.textColor;
-    if (hexLabel)   hexLabel.textContent   = State.textColor;
-    if (slColorEl)  slColorEl.value        = State.subheadlineColor;
-    if (slHexLabel) slHexLabel.textContent = State.subheadlineColor;
+    if (hlInput)     hlInput.value          = State.headline;
+    if (slInput)     slInput.value          = State.subheadline;
+    if (sizeInput)   sizeInput.value        = State.headlineSize;
+    if (slSizeInput) slSizeInput.value      = State.subheadlineSize;
+    if (colorEl)     colorEl.value          = State.textColor;
+    if (hexLabel)    hexLabel.textContent   = State.textColor;
+    if (slColorEl)   slColorEl.value        = State.subheadlineColor;
+    if (slHexLabel)  slHexLabel.textContent = State.subheadlineColor;
 
     // Layout controls
     syncLayoutControls();
@@ -492,6 +496,7 @@
       headline:         State.headline,
       subheadline:      State.subheadline,
       headlineSize:     State.headlineSize,
+      subheadlineSize:  State.subheadlineSize,
       textColor:        State.textColor,
       subheadlineColor: State.subheadlineColor,
     });
@@ -560,21 +565,23 @@
   // ── Text Fields ───────────────────────────────────────────────────────
 
   function wireTextFields() {
-    const hlInput    = Utils.$('#headline-input');
-    const slInput    = Utils.$('#subheadline-input');
-    const sizeInput  = Utils.$('#headline-size');
-    const colorEl    = Utils.$('#text-color');
-    const hexLabel   = Utils.$('#text-color-hex');
-    const slColorEl  = Utils.$('#subheadline-color');
-    const slHexLabel = Utils.$('#subheadline-color-hex');
+    const hlInput     = Utils.$('#headline-input');
+    const slInput     = Utils.$('#subheadline-input');
+    const sizeInput   = Utils.$('#headline-size');
+    const slSizeInput = Utils.$('#subheadline-size');
+    const colorEl     = Utils.$('#text-color');
+    const hexLabel    = Utils.$('#text-color-hex');
+    const slColorEl   = Utils.$('#subheadline-color');
+    const slHexLabel  = Utils.$('#subheadline-color-hex');
 
     // Set initial values
     hlInput.value   = State.headline;
     slInput.value   = State.subheadline;
     sizeInput.value = State.headlineSize;
     colorEl.value   = State.textColor;
-    if (slColorEl)  slColorEl.value        = State.subheadlineColor;
-    if (slHexLabel) slHexLabel.textContent = State.subheadlineColor;
+    if (slSizeInput) slSizeInput.value      = State.subheadlineSize;
+    if (slColorEl)   slColorEl.value        = State.subheadlineColor;
+    if (slHexLabel)  slHexLabel.textContent = State.subheadlineColor;
 
     hlInput.addEventListener('input', () => {
       State.headline = hlInput.value;
@@ -600,6 +607,14 @@
       debouncedTextUpdate();
       markDirty();
     });
+
+    if (slSizeInput) {
+      slSizeInput.addEventListener('input', () => {
+        State.subheadlineSize = parseInt(slSizeInput.value, 10) || 20;
+        debouncedTextUpdate();
+        markDirty();
+      });
+    }
 
     if (slColorEl) {
       slColorEl.addEventListener('input', () => {
@@ -776,6 +791,7 @@
       headline:         State.headline,
       subheadline:      State.subheadline,
       headlineSize:     State.headlineSize,
+      subheadlineSize:  State.subheadlineSize,
       textColor:        State.textColor,
       subheadlineColor: State.subheadlineColor,
     });
