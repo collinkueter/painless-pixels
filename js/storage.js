@@ -1,33 +1,49 @@
 /**
  * Painless Pixels — Persistence (IndexedDB + file export/import)
+ *
+ * Pure data layer — no DOM manipulation. Callers handle UI feedback
+ * via onSave/onError callbacks.
  */
 const Storage = (function () {
   'use strict';
 
-  const DB_NAME    = 'painless-pixels';
-  const STORE_NAME = 'state';
-  const SESSION_KEY = 'session';
-  const SCHEMA_VERSION = 2;
+  var DB_NAME      = 'painless-pixels';
+  var STORE_NAME   = 'state';
+  var SESSION_KEY  = 'session';
+  var SCHEMA_VERSION = 2;
 
-  let _db = null;
-  let _saveVersion = 0;
-  let scheduleSave = function () {}; // no-op until init()
+  var ALLOWED_IMAGE_TYPES = ['data:image/png', 'data:image/jpeg', 'data:image/webp', 'data:image/gif'];
+  var MAX_SLIDE_DATA_LENGTH = 20 * 1024 * 1024; // 20MB per slide
+
+  var _db = null;
+  var _saveVersion = 0;
+  var _idbAvailable = true;
+
+  // Callbacks — set by App layer
+  var _onSave  = null;
+  var _onError = null;
 
   // ── IndexedDB wrapper ─────────────────────────────────────────────────
 
   function _openDB() {
     if (_db) return Promise.resolve(_db);
-    return new Promise((resolve, reject) => {
+    return new Promise(function (resolve, reject) {
       try {
-        const req = indexedDB.open(DB_NAME, 1);
-        req.onupgradeneeded = () => {
-          const db = req.result;
+        var req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = function () {
+          var db = req.result;
           if (!db.objectStoreNames.contains(STORE_NAME)) {
             db.createObjectStore(STORE_NAME);
           }
         };
-        req.onsuccess = () => { _db = req.result; resolve(_db); };
-        req.onerror   = () => reject(req.error);
+        req.onsuccess = function () {
+          _db = req.result;
+          // Handle external deletion / version change
+          _db.onclose = function () { _db = null; };
+          _db.onversionchange = function () { _db.close(); _db = null; };
+          resolve(_db);
+        };
+        req.onerror = function () { reject(req.error); };
       } catch (e) {
         reject(e);
       }
@@ -35,30 +51,36 @@ const Storage = (function () {
   }
 
   function _put(key, value) {
-    return _openDB().then(db => new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror    = () => reject(tx.error);
-    }));
+    return _openDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(value, key);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror    = function () { reject(tx.error); };
+      });
+    });
   }
 
   function _get(key) {
-    return _openDB().then(db => new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const req = tx.objectStore(STORE_NAME).get(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror   = () => reject(req.error);
-    }));
+    return _openDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(STORE_NAME, 'readonly');
+        var req = tx.objectStore(STORE_NAME).get(key);
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror   = function () { reject(req.error); };
+      });
+    });
   }
 
   function _del(key) {
-    return _openDB().then(db => new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).delete(key);
-      tx.oncomplete = () => resolve();
-      tx.onerror    = () => reject(tx.error);
-    }));
+    return _openDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).delete(key);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror    = function () { reject(tx.error); };
+      });
+    });
   }
 
   // ── Serialization ─────────────────────────────────────────────────────
@@ -67,11 +89,15 @@ const Storage = (function () {
     return {
       _schemaVersion: SCHEMA_VERSION,
       _savedAt: new Date().toISOString(),
-      slides: (state.slides || []).map(s => ({
-        id:        s.id,
-        imageData: s.imageData,
-        title:     s.title || 'Untitled',
-      })),
+      slides: (state.slides || []).filter(function (s) {
+        return s && _isValidSlide(s);
+      }).map(function (s) {
+        return {
+          id:        s.id,
+          imageData: s.imageData,
+          title:     s.title || 'Untitled',
+        };
+      }),
       activeSlideIndex: state.activeSlideIndex,
       device:           state.device,
       templateId:       state.templateId,
@@ -99,9 +125,12 @@ const Storage = (function () {
   }
 
   function _isValidSlide(s) {
-    return s &&
-      typeof s.imageData === 'string' &&
-      s.imageData.startsWith('data:image/');
+    if (!s || typeof s.imageData !== 'string') return false;
+    if (s.imageData.length > MAX_SLIDE_DATA_LENGTH) return false;
+    for (var i = 0; i < ALLOWED_IMAGE_TYPES.length; i++) {
+      if (s.imageData.startsWith(ALLOWED_IMAGE_TYPES[i])) return true;
+    }
+    return false;
   }
 
   function deserialize(data, defaults) {
@@ -115,12 +144,15 @@ const Storage = (function () {
     if (!slides.length) return null;
 
     return {
-      slides:           slides.map(s => ({
-        id:        s.id || Utils.uid(),
-        file:      null,
-        imageData: s.imageData,
-        title:     s.title || 'Untitled',
-      })),
+      _savedAt:         data._savedAt || null,
+      slides:           slides.map(function (s) {
+        return {
+          id:        s.id || Utils.uid(),
+          file:      null,
+          imageData: s.imageData,
+          title:     s.title || 'Untitled',
+        };
+      }),
       activeSlideIndex: typeof data.activeSlideIndex === 'number' ? data.activeSlideIndex : 0,
       device:           data.device || defaults.device,
       templateId:       data.templateId || defaults.templateId,
@@ -149,54 +181,58 @@ const Storage = (function () {
 
   // ── Auto-save ─────────────────────────────────────────────────────────
 
-  function init() {
-    scheduleSave = Utils.debounce(function (state) {
+  // Stable wrapper — always delegates to the internal debounced fn
+  var _debouncedSave = function () {};
+
+  function scheduleSave(state) {
+    _debouncedSave(state);
+  }
+
+  function init(opts) {
+    _onSave  = (opts && opts.onSave)  || null;
+    _onError = (opts && opts.onError) || null;
+
+    _debouncedSave = Utils.debounce(function (state) {
       save(state);
-    }, 300);
+    }, 1500);
 
     // Try to open the DB eagerly so first save is fast
-    _openDB().catch(function () {
-      // IDB unavailable — scheduleSave stays functional but save() will silently fail
-      scheduleSave = function () {};
+    _openDB().catch(function (err) {
+      _idbAvailable = false;
+      if (_onError) _onError('idb-unavailable', err);
     });
   }
 
   function save(state) {
+    if (!_idbAvailable) return Promise.resolve();
     var version = ++_saveVersion;
     var data = serialize(state);
+    if (!data.slides.length) return Promise.resolve(); // don't save empty/invalid state
     return _put(SESSION_KEY, data).then(function () {
-      // Only show indicator if this is still the latest save
-      if (version === _saveVersion) {
-        _flashSaveStatus();
+      if (version === _saveVersion && _onSave) {
+        _onSave();
       }
-    }).catch(function () {
-      // Silently fail — IDB may be unavailable
+    }).catch(function (err) {
+      if (_onError) _onError('save-failed', err);
     });
   }
 
   function load() {
-    return _get(SESSION_KEY).catch(function () {
+    return _get(SESSION_KEY).catch(function (err) {
+      if (_onError) _onError('load-failed', err);
       return null;
     });
   }
 
   function clear() {
-    return _del(SESSION_KEY).catch(function () {});
-  }
-
-  function _flashSaveStatus() {
-    var el = document.getElementById('save-status');
-    if (!el) return;
-    el.textContent = 'Saved';
-    el.classList.add('visible');
-    setTimeout(function () {
-      el.classList.remove('visible');
-    }, 1500);
+    return _del(SESSION_KEY).catch(function (err) {
+      if (_onError) _onError('clear-failed', err);
+    });
   }
 
   // ── File export/import ────────────────────────────────────────────────
 
-  function exportFile(state) {
+  function exportFile(state, filename) {
     var data = serialize(state);
     var envelope = {
       app:     'painless-pixels',
@@ -206,7 +242,16 @@ const Storage = (function () {
     };
     var json = JSON.stringify(envelope);
     var blob = new Blob([json], { type: 'application/json' });
-    saveAs(blob, 'design.pp');
+    if (typeof saveAs === 'function') {
+      saveAs(blob, filename || 'design.pp');
+    } else {
+      // Fallback: create temporary download link
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename || 'design.pp';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
   }
 
   function importFile(file) {
@@ -240,12 +285,12 @@ const Storage = (function () {
 
   return {
     init:         init,
+    scheduleSave: scheduleSave,
     save:         save,
     load:         load,
     clear:        clear,
     exportFile:   exportFile,
     importFile:   importFile,
     deserialize:  deserialize,
-    get scheduleSave() { return scheduleSave; },
   };
 })();

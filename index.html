@@ -22,7 +22,7 @@
 <body>
 
   <!-- ───────────────────────── STEP 1: UPLOAD ───────────────────────── -->
-  <div id="step-upload" class="step-screen">
+  <div id="step-upload" class="step-screen active">
     <button class="theme-toggle upload-theme-toggle" aria-label="Toggle theme">
       <svg class="icon-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path d="M13.5 9.5a5.5 5.5 0 0 1-7-7A5.5 5.5 0 1 0 13.5 9.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
@@ -101,29 +101,29 @@
         </div>
       </div>
       <div class="header-right">
-        <span class="save-status" id="save-status"></span>
+        <span class="save-status" id="save-status" aria-live="polite" aria-atomic="true"></span>
         <button class="btn-ghost" id="new-design-btn" aria-label="New design">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M3 1H11Q12 1 12 2V12Q12 13 11 13H3Q2 13 2 12V2Q2 1 3 1Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
             <path d="M5 5H9M5 7H9M5 9H7" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
           </svg>
-          New
+          <span class="btn-label">New</span>
         </button>
         <button class="btn-ghost" id="load-design-btn" aria-label="Open design file">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M2 4V11Q2 12 3 12H11Q12 12 12 11V6Q12 5 11 5H7L5.5 3H3Q2 3 2 4Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
           </svg>
-          Open
+          <span class="btn-label">Open</span>
         </button>
-        <button class="btn-ghost" id="save-design-btn" aria-label="Save design to file">
+        <button class="btn-ghost" id="save-design-btn" aria-label="Download design as .pp file">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="M2 2Q2 1 3 1H9.5L12 3.5V12Q12 13 11 13H3Q2 13 2 12V2Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-            <path d="M4 1V4H9V1" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
-            <path d="M4 9H10M4 11H10" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+            <path d="M7 1V9M7 9L4 6M7 9L10 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 11H12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
           </svg>
-          Save
+          <span class="btn-label">Download .pp</span>
         </button>
-        <input type="file" id="load-file-input" accept=".pp,.json" hidden>
+        <input type="file" id="load-file-input" accept=".pp,.json,application/json" hidden>
+        <div class="header-separator" aria-hidden="true"></div>
         <button class="theme-toggle" aria-label="Toggle theme">
           <svg class="icon-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M13.5 9.5a5.5 5.5 0 0 1-7-7A5.5 5.5 0 1 0 13.5 9.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
@@ -364,7 +364,7 @@
         <div class="progress-track">
           <div class="progress-fill" id="progress-fill"></div>
         </div>
-        <div class="progress-status" id="progress-status">Generating…</div>
+        <div class="progress-status" id="progress-status" aria-live="assertive">Generating…</div>
       </div>
 
       <div class="export-cta" id="export-cta">

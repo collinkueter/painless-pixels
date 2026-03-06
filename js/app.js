@@ -7,36 +7,7 @@
 (function () {
   'use strict';
 
-  // ── State ───────────────────────────────────────────────────────────────
-
-  const State = {
-    slides:            [],
-    activeSlideIndex:  0,
-    device:            'iphone',
-    templateId:        'bold-dark',
-    bgType:            'gradient',
-    bgFrom:            '#0d0d0d',
-    bgTo:              '#18103a',
-    bgAngle:           145,
-    bgSolid:           '#6366f1',
-    bgSplitTop:        '#5b5fcf',
-    bgSplitBottom:     '#f5f5f5',
-    headline:          'Your App Headline',
-    subheadline:       'The perfect description',
-    headlineSize:      38,
-    textColor:         '#ffffff',
-    phoneXFrac:        null,
-    phoneYFrac:        null,
-    phoneAngle:        0,
-    headlineXFrac:     null,
-    headlineYFrac:     null,
-    headlineAngle:     0,
-    subheadlineXFrac:  null,
-    subheadlineYFrac:  null,
-    subheadlineAngle:  0,
-  };
-
-  // ── Defaults (used for deserialization fallbacks) ───────────────────────
+  // ── Defaults (single source of truth) ─────────────────────────────────
 
   const DEFAULTS = {
     device:        'iphone',
@@ -54,11 +25,71 @@
     textColor:     '#ffffff',
   };
 
+  // ── State (initialized from DEFAULTS) ──────────────────────────────────
+
+  const State = Object.assign({
+    slides:           [],
+    activeSlideIndex: 0,
+    phoneXFrac:       null,
+    phoneYFrac:       null,
+    phoneAngle:       0,
+    headlineXFrac:    null,
+    headlineYFrac:    null,
+    headlineAngle:    0,
+    subheadlineXFrac: null,
+    subheadlineYFrac: null,
+    subheadlineAngle: 0,
+  }, DEFAULTS);
+
+  // ── Save status indicator ──────────────────────────────────────────────
+
+  let _saveFlashTimer = null;
+
+  function flashSaveStatus() {
+    const el = Utils.$('#save-status');
+    if (!el) return;
+    // Clear any pending fade-out to prevent flicker
+    if (_saveFlashTimer) clearTimeout(_saveFlashTimer);
+    el.textContent = '';
+    // Re-set text in next microtask so aria-live re-announces
+    requestAnimationFrame(() => {
+      el.textContent = 'Auto-saved';
+      el.classList.add('visible');
+      _saveFlashTimer = setTimeout(() => {
+        el.classList.remove('visible');
+        _saveFlashTimer = null;
+      }, 2000);
+    });
+  }
+
+  function showSaveError() {
+    const el = Utils.$('#save-status');
+    if (!el) return;
+    if (_saveFlashTimer) clearTimeout(_saveFlashTimer);
+    el.textContent = 'Save failed';
+    el.classList.add('visible', 'error');
+    // Error state persists — don't auto-dismiss
+  }
+
   // ── Boot ────────────────────────────────────────────────────────────────
 
   document.addEventListener('DOMContentLoaded', async () => {
     Theme.init();
-    Storage.init();
+    Storage.init({
+      onSave: flashSaveStatus,
+      onError: function (type) {
+        if (type === 'idb-unavailable') {
+          showSaveError();
+          const el = Utils.$('#save-status');
+          if (el) {
+            el.textContent = 'Auto-save unavailable';
+            el.classList.add('visible', 'error');
+          }
+        } else if (type === 'save-failed') {
+          showSaveError();
+        }
+      },
+    });
     initEditor();
     initExportOverlay();
     wireFileOperations();
@@ -67,17 +98,61 @@
     try {
       const raw = await Storage.load();
       if (raw) saved = Storage.deserialize(raw, DEFAULTS);
-    } catch (_) {}
+    } catch (e) {
+      if (typeof console !== 'undefined') console.warn('[PP] Failed to load session:', e);
+    }
 
     if (saved && saved.slides && saved.slides.length) {
+      Utils.$('#step-upload').classList.remove('active');
       restoreState(saved);
       syncAllControls();
       transitionToEditor();
+
+      // Show restore banner if session is older than 5 minutes
+      if (saved._savedAt) {
+        const age = Date.now() - new Date(saved._savedAt).getTime();
+        if (age > 5 * 60 * 1000) {
+          showRestoreBanner(saved._savedAt);
+        }
+      }
     } else {
       initUploadStep();
-      Utils.$('#step-upload').classList.add('active');
+      // Upload screen is already active from HTML
     }
   });
+
+  // ── Session restore banner ────────────────────────────────────────────
+
+  function showRestoreBanner(savedAt) {
+    const banner = document.createElement('div');
+    banner.className = 'restore-banner';
+    banner.setAttribute('role', 'status');
+
+    const age = Date.now() - new Date(savedAt).getTime();
+    let label;
+    if (age < 60 * 60 * 1000) label = Math.round(age / 60000) + ' min ago';
+    else if (age < 24 * 60 * 60 * 1000) label = Math.round(age / 3600000) + 'h ago';
+    else label = Math.round(age / 86400000) + 'd ago';
+
+    banner.innerHTML =
+      '<span>Session restored from ' + label + '</span>' +
+      '<button class="restore-banner-btn" id="restore-fresh-btn">Start fresh</button>' +
+      '<button class="restore-banner-close" aria-label="Dismiss">' +
+        '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 2L8 8M8 2L2 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>' +
+      '</button>';
+
+    document.body.appendChild(banner);
+
+    Utils.$('#restore-fresh-btn').addEventListener('click', clearSession);
+    banner.querySelector('.restore-banner-close').addEventListener('click', () => {
+      banner.remove();
+    });
+
+    // Auto-dismiss after 8 seconds
+    setTimeout(() => {
+      if (banner.parentNode) banner.remove();
+    }, 8000);
+  }
 
   // ── Auto-save helper ────────────────────────────────────────────────────
 
@@ -88,21 +163,22 @@
   // ── Restore from saved data ───────────────────────────────────────────
 
   function restoreState(data) {
+    // Trust deserialize output — it already validated and applied defaults
     State.slides           = data.slides;
-    State.activeSlideIndex = data.activeSlideIndex || 0;
-    State.device           = data.device || DEFAULTS.device;
-    State.templateId       = data.templateId || DEFAULTS.templateId;
-    State.bgType           = data.bgType || DEFAULTS.bgType;
-    State.bgFrom           = data.bgFrom || DEFAULTS.bgFrom;
-    State.bgTo             = data.bgTo || DEFAULTS.bgTo;
-    State.bgAngle          = typeof data.bgAngle === 'number' ? data.bgAngle : DEFAULTS.bgAngle;
-    State.bgSolid          = data.bgSolid || DEFAULTS.bgSolid;
-    State.bgSplitTop       = data.bgSplitTop || DEFAULTS.bgSplitTop;
-    State.bgSplitBottom    = data.bgSplitBottom || DEFAULTS.bgSplitBottom;
-    State.headline         = typeof data.headline === 'string' ? data.headline : DEFAULTS.headline;
-    State.subheadline      = typeof data.subheadline === 'string' ? data.subheadline : DEFAULTS.subheadline;
-    State.headlineSize     = typeof data.headlineSize === 'number' ? data.headlineSize : DEFAULTS.headlineSize;
-    State.textColor        = data.textColor || DEFAULTS.textColor;
+    State.activeSlideIndex = data.activeSlideIndex;
+    State.device           = data.device;
+    State.templateId       = data.templateId;
+    State.bgType           = data.bgType;
+    State.bgFrom           = data.bgFrom;
+    State.bgTo             = data.bgTo;
+    State.bgAngle          = data.bgAngle;
+    State.bgSolid          = data.bgSolid;
+    State.bgSplitTop       = data.bgSplitTop;
+    State.bgSplitBottom    = data.bgSplitBottom;
+    State.headline         = data.headline;
+    State.subheadline      = data.subheadline;
+    State.headlineSize     = data.headlineSize;
+    State.textColor        = data.textColor;
     State.phoneXFrac       = typeof data.phoneXFrac === 'number' ? data.phoneXFrac : null;
     State.phoneYFrac       = typeof data.phoneYFrac === 'number' ? data.phoneYFrac : null;
     State.phoneAngle       = typeof data.phoneAngle === 'number' ? data.phoneAngle : 0;
@@ -160,7 +236,7 @@
 
     if (saveBtn) saveBtn.addEventListener('click', saveDesignToFile);
     if (openBtn) openBtn.addEventListener('click', () => fileIn && fileIn.click());
-    if (newBtn)  newBtn.addEventListener('click', clearSession);
+    if (newBtn)  newBtn.addEventListener('click', showNewDesignConfirm);
     if (uploadOpen) uploadOpen.addEventListener('click', () => fileIn && fileIn.click());
 
     if (fileIn) {
@@ -179,20 +255,92 @@
           syncAllControls();
           transitionToEditor();
           markDirty();
-        } catch (_) {
-          alert('Could not open file — invalid format.');
+        } catch (err) {
+          alert('Could not open file — invalid or corrupted format.');
+          if (typeof console !== 'undefined') console.warn('[PP] Import failed:', err);
         }
       });
     }
   }
 
   function saveDesignToFile() {
-    Storage.exportFile(State);
+    // Generate filename from headline
+    const name = (State.headline || 'design')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 40) || 'design';
+    Storage.exportFile(State, name + '.pp');
   }
 
-  function clearSession() {
-    if (!confirm('Start a new design? Current work will be cleared.')) return;
-    Storage.clear();
+  // ── New Design confirmation (inline, not confirm()) ───────────────────
+
+  function showNewDesignConfirm() {
+    // Remove any existing dropdown
+    const existing = Utils.$('#new-design-dropdown');
+    if (existing) { existing.remove(); return; }
+
+    const btn = Utils.$('#new-design-btn');
+    const dropdown = document.createElement('div');
+    dropdown.id = 'new-design-dropdown';
+    dropdown.className = 'new-design-dropdown';
+    dropdown.setAttribute('role', 'menu');
+    dropdown.innerHTML =
+      '<button class="new-design-option" id="new-save-first" role="menuitem">' +
+        '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2Q2 1 3 1H8L10 3V10Q10 11 9 11H3Q2 11 2 10V2Z" stroke="currentColor" stroke-width="1"/></svg>' +
+        'Save first then clear' +
+      '</button>' +
+      '<button class="new-design-option new-design-danger" id="new-discard" role="menuitem">' +
+        '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>' +
+        'Discard and start fresh' +
+      '</button>';
+
+    btn.parentNode.style.position = 'relative';
+    btn.parentNode.appendChild(dropdown);
+
+    // Position below the New button
+    const rect = btn.getBoundingClientRect();
+    const parentRect = btn.parentNode.getBoundingClientRect();
+    dropdown.style.top = (rect.bottom - parentRect.top + 4) + 'px';
+    dropdown.style.left = (rect.left - parentRect.left) + 'px';
+
+    Utils.$('#new-save-first').addEventListener('click', () => {
+      dropdown.remove();
+      saveDesignToFile();
+      clearSession();
+    });
+
+    Utils.$('#new-discard').addEventListener('click', () => {
+      dropdown.remove();
+      clearSession();
+    });
+
+    // Close on outside click
+    const closeHandler = (e) => {
+      if (!dropdown.contains(e.target) && e.target !== btn) {
+        dropdown.remove();
+        document.removeEventListener('click', closeHandler, true);
+      }
+    };
+    // Delay to avoid the current click closing it immediately
+    setTimeout(() => {
+      document.addEventListener('click', closeHandler, true);
+    }, 0);
+
+    // Close on Escape
+    dropdown.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        dropdown.remove();
+        btn.focus();
+      }
+    });
+
+    // Focus first option
+    Utils.$('#new-save-first').focus();
+  }
+
+  async function clearSession() {
+    await Storage.clear();
     location.reload();
   }
 
@@ -288,11 +436,13 @@
     Utils.$('#step-editor').classList.add('active');
 
     // Give the canvas wrapper the "loaded" class for animation
-    setTimeout(() => {
-      Utils.$('#canvas-wrapper').classList.add('loaded');
-      const firstInput = Utils.$('#headline-input');
-      if (firstInput) firstInput.focus();
-    }, 50);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        Utils.$('#canvas-wrapper').classList.add('loaded');
+        const firstInput = Utils.$('#headline-input');
+        if (firstInput) firstInput.focus();
+      });
+    });
 
     renderSlideList();
     loadActiveSlide();
@@ -770,6 +920,27 @@
     Utils.$('#export-backdrop').addEventListener('click', closeExportOverlay);
     Utils.$('#do-export-btn').addEventListener('click', runExport);
     Utils.$('#copy-btn').addEventListener('click', copyCurrentSlide);
+
+    // Focus trap for the overlay
+    const panel = Utils.$('.overlay-panel');
+    if (panel) {
+      panel.addEventListener('keydown', (e) => {
+        if (e.key !== 'Tab') return;
+        const focusable = panel.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last  = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      });
+    }
   }
 
   function openExportOverlay() {
@@ -778,10 +949,10 @@
     Utils.$('#export-progress-wrap').classList.add('hidden');
     Utils.show(Utils.$('#export-cta'));
     // Move focus into the overlay for keyboard users
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       const firstBtn = Utils.$('#do-export-btn');
       if (firstBtn) firstBtn.focus();
-    }, 50);
+    });
   }
 
   function closeExportOverlay() {
@@ -935,10 +1106,17 @@
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────
 
+  /** Check if focus is on an interactive input element */
+  function _isFocusedOnInput() {
+    const tag = document.activeElement && document.activeElement.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+           (document.activeElement && document.activeElement.isContentEditable);
+  }
+
   document.addEventListener('keydown', (e) => {
     const editorActive = Utils.$('#step-editor').classList.contains('active');
 
-    // Cmd/Ctrl + S → save design to file
+    // Cmd/Ctrl + S → download design file
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
       e.preventDefault();
       if (editorActive) saveDesignToFile();
@@ -956,11 +1134,17 @@
       e.preventDefault();
       if (editorActive) openExportOverlay();
     }
-    // Escape → close export
-    if (e.key === 'Escape') closeExportOverlay();
-    // Arrow keys to switch slides
+    // Escape → close export overlay or new-design dropdown
+    if (e.key === 'Escape') {
+      const dropdown = Utils.$('#new-design-dropdown');
+      if (dropdown) { dropdown.remove(); return; }
+      closeExportOverlay();
+    }
+    // Arrow keys to switch slides — only when not focused on input elements
+    if (_isFocusedOnInput()) return;
+
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-      if (Utils.$('#step-editor').classList.contains('active')) {
+      if (editorActive && State.slides.length > 1) {
         const next = (State.activeSlideIndex + 1) % State.slides.length;
         if (next !== State.activeSlideIndex) {
           State.activeSlideIndex = next;
@@ -969,12 +1153,16 @@
             el.setAttribute('aria-selected', i === next ? 'true' : 'false');
             el.setAttribute('tabindex', i === next ? '0' : '-1');
           });
+          // Focus the active slide item for roving tabindex
+          const activeItem = Utils.$('.slide-item.active');
+          if (activeItem) activeItem.focus();
           loadActiveSlide();
+          markDirty();
         }
       }
     }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      if (Utils.$('#step-editor').classList.contains('active')) {
+      if (editorActive && State.slides.length > 1) {
         const prev = (State.activeSlideIndex - 1 + State.slides.length) % State.slides.length;
         if (prev !== State.activeSlideIndex) {
           State.activeSlideIndex = prev;
@@ -983,7 +1171,10 @@
             el.setAttribute('aria-selected', i === prev ? 'true' : 'false');
             el.setAttribute('tabindex', i === prev ? '0' : '-1');
           });
+          const activeItem = Utils.$('.slide-item.active');
+          if (activeItem) activeItem.focus();
           loadActiveSlide();
+          markDirty();
         }
       }
     }
