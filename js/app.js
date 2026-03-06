@@ -25,15 +25,176 @@
     subheadline:       'The perfect description',
     headlineSize:      38,
     textColor:         '#ffffff',
+    phoneXFrac:        null,
+    phoneYFrac:        null,
+    phoneAngle:        0,
+    headlineXFrac:     null,
+    headlineYFrac:     null,
+    headlineAngle:     0,
+    subheadlineXFrac:  null,
+    subheadlineYFrac:  null,
+    subheadlineAngle:  0,
+  };
+
+  // ── Defaults (used for deserialization fallbacks) ───────────────────────
+
+  const DEFAULTS = {
+    device:        'iphone',
+    templateId:    'bold-dark',
+    bgType:        'gradient',
+    bgFrom:        '#0d0d0d',
+    bgTo:          '#18103a',
+    bgAngle:       145,
+    bgSolid:       '#6366f1',
+    bgSplitTop:    '#5b5fcf',
+    bgSplitBottom: '#f5f5f5',
+    headline:      'Your App Headline',
+    subheadline:   'The perfect description',
+    headlineSize:  38,
+    textColor:     '#ffffff',
   };
 
   // ── Boot ────────────────────────────────────────────────────────────────
 
-  document.addEventListener('DOMContentLoaded', () => {
-    initUploadStep();
+  document.addEventListener('DOMContentLoaded', async () => {
+    Theme.init();
+    Storage.init();
     initEditor();
     initExportOverlay();
+    wireFileOperations();
+
+    let saved = null;
+    try {
+      const raw = await Storage.load();
+      if (raw) saved = Storage.deserialize(raw, DEFAULTS);
+    } catch (_) {}
+
+    if (saved && saved.slides && saved.slides.length) {
+      restoreState(saved);
+      syncAllControls();
+      transitionToEditor();
+    } else {
+      initUploadStep();
+      Utils.$('#step-upload').classList.add('active');
+    }
   });
+
+  // ── Auto-save helper ────────────────────────────────────────────────────
+
+  function markDirty() {
+    Storage.scheduleSave(State);
+  }
+
+  // ── Restore from saved data ───────────────────────────────────────────
+
+  function restoreState(data) {
+    State.slides           = data.slides;
+    State.activeSlideIndex = data.activeSlideIndex || 0;
+    State.device           = data.device || DEFAULTS.device;
+    State.templateId       = data.templateId || DEFAULTS.templateId;
+    State.bgType           = data.bgType || DEFAULTS.bgType;
+    State.bgFrom           = data.bgFrom || DEFAULTS.bgFrom;
+    State.bgTo             = data.bgTo || DEFAULTS.bgTo;
+    State.bgAngle          = typeof data.bgAngle === 'number' ? data.bgAngle : DEFAULTS.bgAngle;
+    State.bgSolid          = data.bgSolid || DEFAULTS.bgSolid;
+    State.bgSplitTop       = data.bgSplitTop || DEFAULTS.bgSplitTop;
+    State.bgSplitBottom    = data.bgSplitBottom || DEFAULTS.bgSplitBottom;
+    State.headline         = typeof data.headline === 'string' ? data.headline : DEFAULTS.headline;
+    State.subheadline      = typeof data.subheadline === 'string' ? data.subheadline : DEFAULTS.subheadline;
+    State.headlineSize     = typeof data.headlineSize === 'number' ? data.headlineSize : DEFAULTS.headlineSize;
+    State.textColor        = data.textColor || DEFAULTS.textColor;
+    State.phoneXFrac       = typeof data.phoneXFrac === 'number' ? data.phoneXFrac : null;
+    State.phoneYFrac       = typeof data.phoneYFrac === 'number' ? data.phoneYFrac : null;
+    State.phoneAngle       = typeof data.phoneAngle === 'number' ? data.phoneAngle : 0;
+    State.headlineXFrac    = typeof data.headlineXFrac === 'number' ? data.headlineXFrac : null;
+    State.headlineYFrac    = typeof data.headlineYFrac === 'number' ? data.headlineYFrac : null;
+    State.headlineAngle    = typeof data.headlineAngle === 'number' ? data.headlineAngle : 0;
+    State.subheadlineXFrac = typeof data.subheadlineXFrac === 'number' ? data.subheadlineXFrac : null;
+    State.subheadlineYFrac = typeof data.subheadlineYFrac === 'number' ? data.subheadlineYFrac : null;
+    State.subheadlineAngle = typeof data.subheadlineAngle === 'number' ? data.subheadlineAngle : 0;
+  }
+
+  function syncAllControls() {
+    // Text fields
+    const hlInput   = Utils.$('#headline-input');
+    const slInput   = Utils.$('#subheadline-input');
+    const sizeInput = Utils.$('#headline-size');
+    const colorEl   = Utils.$('#text-color');
+    const hexLabel  = Utils.$('#text-color-hex');
+    if (hlInput)   hlInput.value   = State.headline;
+    if (slInput)   slInput.value   = State.subheadline;
+    if (sizeInput) sizeInput.value = State.headlineSize;
+    if (colorEl)   colorEl.value   = State.textColor;
+    if (hexLabel)  hexLabel.textContent = State.textColor;
+
+    // Layout controls
+    syncLayoutControls();
+
+    // Background controls
+    syncBgControls();
+
+    // Device picker
+    Utils.$$('.device-btn').forEach(btn => {
+      const isActive = btn.dataset.device === State.device;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+    Editor.switchDevice(State.device);
+
+    // Template picker
+    Templates.renderGrid(
+      Utils.$('#template-grid'),
+      State.templateId,
+      onTemplateSelect
+    );
+  }
+
+  // ── File operations ───────────────────────────────────────────────────
+
+  function wireFileOperations() {
+    const saveBtn  = Utils.$('#save-design-btn');
+    const openBtn  = Utils.$('#load-design-btn');
+    const newBtn   = Utils.$('#new-design-btn');
+    const fileIn   = Utils.$('#load-file-input');
+    const uploadOpen = Utils.$('#upload-open-btn');
+
+    if (saveBtn) saveBtn.addEventListener('click', saveDesignToFile);
+    if (openBtn) openBtn.addEventListener('click', () => fileIn && fileIn.click());
+    if (newBtn)  newBtn.addEventListener('click', clearSession);
+    if (uploadOpen) uploadOpen.addEventListener('click', () => fileIn && fileIn.click());
+
+    if (fileIn) {
+      fileIn.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        e.target.value = '';
+        if (!file) return;
+        try {
+          const raw = await Storage.importFile(file);
+          const data = Storage.deserialize(raw, DEFAULTS);
+          if (!data || !data.slides.length) {
+            alert('Could not load design — no valid slides found.');
+            return;
+          }
+          restoreState(data);
+          syncAllControls();
+          transitionToEditor();
+          markDirty();
+        } catch (_) {
+          alert('Could not open file — invalid format.');
+        }
+      });
+    }
+  }
+
+  function saveDesignToFile() {
+    Storage.exportFile(State);
+  }
+
+  function clearSession() {
+    if (!confirm('Start a new design? Current work will be cleared.')) return;
+    Storage.clear();
+    location.reload();
+  }
 
   // ══════════════════════════════════════════════════════════════════════
   // STEP 1 — UPLOAD
@@ -53,6 +214,7 @@
       State.slides = slides;
       State.activeSlideIndex = 0;
       transitionToEditor();
+      markDirty();
     });
 
     // Keyboard accessibility: Enter/Space activates the zone like a button
@@ -82,6 +244,7 @@
     // Wire sidebar controls (all debounced at 150 ms)
     wireDevicePicker();
     wireTextFields();
+    wireLayoutControls();
     wireBgControls();
     wireSlidePanel();
     wireHeaderBtns();
@@ -97,6 +260,26 @@
         const el = Utils.$('#subheadline-input');
         if (el) el.value = value;
       }
+      markDirty();
+    };
+
+    // Sync canvas drag/rotate back to State
+    Editor._onLayoutChange = (target, data) => {
+      if (target === 'phone') {
+        State.phoneXFrac = data.xFrac;
+        State.phoneYFrac = data.yFrac;
+        State.phoneAngle = data.angle;
+      } else if (target === 'headline') {
+        State.headlineXFrac = data.xFrac;
+        State.headlineYFrac = data.yFrac;
+        State.headlineAngle = data.angle;
+      } else if (target === 'subheadline') {
+        State.subheadlineXFrac = data.xFrac;
+        State.subheadlineYFrac = data.yFrac;
+        State.subheadlineAngle = data.angle;
+      }
+      syncLayoutControls();
+      markDirty();
     };
   }
 
@@ -123,6 +306,10 @@
     State.templateId = id;
     const tmpl = Templates.getById(id);
 
+    // Reset custom position/rotation overrides
+    resetLayoutOverrides();
+    syncLayoutControls();
+
     // Sync sidebar controls to template defaults
     if (tmpl.bg.type === 'split') {
       State.bgType       = 'split';
@@ -139,16 +326,41 @@
     }
     syncBgControls();
     applyCurrentTemplate();
+    markDirty();
   }
 
   function applyCurrentTemplate() {
-    Editor.applyTemplate(State.templateId, true); // skip internal renderAll
+    Editor.applyTemplate(State.templateId, true, getLayoutOverrides()); // skip internal renderAll
+    autoTextColor();
     Editor.updateText({                           // this one calls renderAll
       headline:    State.headline,
       subheadline: State.subheadline,
       headlineSize: State.headlineSize,
       textColor:   State.textColor,
     });
+  }
+
+  /** Pick white or dark text based on current background luminance */
+  function autoTextColor() {
+    let dominant;
+    if (State.bgType === 'gradient') {
+      dominant = Utils.averageHex(State.bgFrom, State.bgTo);
+    } else if (State.bgType === 'solid') {
+      dominant = State.bgSolid;
+    } else if (State.bgType === 'split') {
+      dominant = State.bgSplitTop; // headline sits in top half
+    } else {
+      return;
+    }
+
+    const color = Utils.isLight(dominant) ? '#111111' : '#ffffff';
+    State.textColor = color;
+
+    // Sync sidebar color picker
+    const colorEl  = Utils.$('#text-color');
+    const hexLabel = Utils.$('#text-color-hex');
+    if (colorEl)  colorEl.value = color;
+    if (hexLabel) hexLabel.textContent = color;
   }
 
   // ── Device Picker ─────────────────────────────────────────────────────
@@ -168,6 +380,7 @@
 
         // Adjust slide-item aspect ratio in the sidebar
         updateSlideAspectRatio();
+        markDirty();
       });
     });
   }
@@ -195,34 +408,29 @@
     sizeInput.value = State.headlineSize;
     colorEl.value   = State.textColor;
 
-    const debouncedUpdate = Utils.debounce(() => {
-      Editor.updateText({
-        headline:    State.headline,
-        subheadline: State.subheadline,
-        headlineSize: State.headlineSize,
-        textColor:   State.textColor,
-      });
-    }, 150);
-
     hlInput.addEventListener('input', () => {
       State.headline = hlInput.value;
-      debouncedUpdate();
+      debouncedTextUpdate();
+      markDirty();
     });
 
     slInput.addEventListener('input', () => {
       State.subheadline = slInput.value;
-      debouncedUpdate();
+      debouncedTextUpdate();
+      markDirty();
     });
 
     sizeInput.addEventListener('input', () => {
       State.headlineSize = parseInt(sizeInput.value, 10) || 38;
-      debouncedUpdate();
+      debouncedTextUpdate();
+      markDirty();
     });
 
     colorEl.addEventListener('input', () => {
       State.textColor = colorEl.value;
       hexLabel.textContent = colorEl.value;
-      debouncedUpdate();
+      debouncedTextUpdate();
+      markDirty();
     });
   }
 
@@ -309,6 +517,92 @@
     });
   }
 
+  // ── Layout Controls (position & rotation) ────────────────────────────
+
+  function wireLayoutControls() {
+    const phoneAngleInput = Utils.$('#phone-angle');
+    const hlAngleInput    = Utils.$('#headline-angle');
+    const slAngleInput    = Utils.$('#subline-angle');
+    const resetBtn        = Utils.$('#reset-layout-btn');
+
+    if (phoneAngleInput) {
+      phoneAngleInput.addEventListener('input', () => {
+        State.phoneAngle = parseInt(phoneAngleInput.value, 10) || 0;
+        Editor.setPhoneAngle(State.phoneAngle);
+        markDirty();
+      });
+    }
+
+    if (hlAngleInput) {
+      hlAngleInput.addEventListener('input', () => {
+        State.headlineAngle = parseInt(hlAngleInput.value, 10) || 0;
+        Editor.setHeadlineAngle(State.headlineAngle);
+        markDirty();
+      });
+    }
+
+    if (slAngleInput) {
+      slAngleInput.addEventListener('input', () => {
+        State.subheadlineAngle = parseInt(slAngleInput.value, 10) || 0;
+        Editor.setSublineAngle(State.subheadlineAngle);
+        markDirty();
+      });
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        resetLayoutOverrides();
+        syncLayoutControls();
+        applyCurrentTemplate();
+        markDirty();
+      });
+    }
+  }
+
+  function syncLayoutControls() {
+    const phoneAngleInput = Utils.$('#phone-angle');
+    const hlAngleInput    = Utils.$('#headline-angle');
+    const slAngleInput    = Utils.$('#subline-angle');
+    if (phoneAngleInput) phoneAngleInput.value = State.phoneAngle || 0;
+    if (hlAngleInput)    hlAngleInput.value    = State.headlineAngle || 0;
+    if (slAngleInput)    slAngleInput.value    = State.subheadlineAngle || 0;
+  }
+
+  function resetLayoutOverrides() {
+    State.phoneXFrac       = null;
+    State.phoneYFrac       = null;
+    State.phoneAngle       = 0;
+    State.headlineXFrac    = null;
+    State.headlineYFrac    = null;
+    State.headlineAngle    = 0;
+    State.subheadlineXFrac = null;
+    State.subheadlineYFrac = null;
+    State.subheadlineAngle = 0;
+  }
+
+  function getLayoutOverrides() {
+    return {
+      phoneXFrac:       State.phoneXFrac,
+      phoneYFrac:       State.phoneYFrac,
+      phoneAngle:       State.phoneAngle,
+      headlineXFrac:    State.headlineXFrac,
+      headlineYFrac:    State.headlineYFrac,
+      headlineAngle:    State.headlineAngle,
+      subheadlineXFrac: State.subheadlineXFrac,
+      subheadlineYFrac: State.subheadlineYFrac,
+      subheadlineAngle: State.subheadlineAngle,
+    };
+  }
+
+  const debouncedTextUpdate = Utils.debounce(() => {
+    Editor.updateText({
+      headline:    State.headline,
+      subheadline: State.subheadline,
+      headlineSize: State.headlineSize,
+      textColor:   State.textColor,
+    });
+  }, 150);
+
   const debouncedBgUpdate = Utils.debounce(() => {
     Editor.updateBackground({
       bgType:        State.bgType,
@@ -322,7 +616,10 @@
   }, 50);
 
   function applyBgUpdate() {
+    autoTextColor();
     debouncedBgUpdate();
+    debouncedTextUpdate();
+    markDirty();
   }
 
   // ── Slides Panel ──────────────────────────────────────────────────────
@@ -341,6 +638,7 @@
       State.slides.push(...newSlides.slice(0, maxNew));
       renderSlideList();
       updateExportCounts();
+      markDirty();
     });
 
     // "Add screenshots" button in header
@@ -411,6 +709,7 @@
           el.setAttribute('tabindex', i === idx ? '0' : '-1');
         });
         loadActiveSlide();
+        markDirty();
       });
 
       upBtn.addEventListener('click', (e) => { e.stopPropagation(); reorderSlide(idx, -1); });
@@ -435,6 +734,7 @@
     else if (State.activeSlideIndex === newIdx) State.activeSlideIndex = idx;
     renderSlideList();
     updateExportCounts();
+    markDirty();
   }
 
   function loadActiveSlide() {
@@ -452,6 +752,7 @@
       loadActiveSlide();
     }
     updateExportCounts();
+    markDirty();
   }
 
   // ── Header Buttons ────────────────────────────────────────────────────
@@ -531,6 +832,7 @@
           bgSplitBottom: State.bgSplitBottom,
         },
         textState,
+        layoutState: getLayoutOverrides(),
         onProgress(current, total, label) {
           const pct = Math.round((current / total) * 100);
           progressFill.style.width = pct + '%';
@@ -597,6 +899,7 @@
           bgSplitTop: State.bgSplitTop, bgSplitBottom: State.bgSplitBottom,
         },
         textState: Editor.getTextState(),
+        layoutState: getLayoutOverrides(),
         screenshotImg,
         frameImg,
       });
@@ -633,10 +936,24 @@
   // ── Keyboard shortcuts ────────────────────────────────────────────────
 
   document.addEventListener('keydown', (e) => {
+    const editorActive = Utils.$('#step-editor').classList.contains('active');
+
+    // Cmd/Ctrl + S → save design to file
+    if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+      e.preventDefault();
+      if (editorActive) saveDesignToFile();
+      return;
+    }
+    // Cmd/Ctrl + O → open design file
+    if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
+      e.preventDefault();
+      const fileIn = Utils.$('#load-file-input');
+      if (fileIn) fileIn.click();
+      return;
+    }
     // Cmd/Ctrl + E → open export
     if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
       e.preventDefault();
-      const editorActive = Utils.$('#step-editor').classList.contains('active');
       if (editorActive) openExportOverlay();
     }
     // Escape → close export

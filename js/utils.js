@@ -67,6 +67,42 @@ const Utils = {
     return hex && !hex.startsWith('#') ? '#' + hex : hex;
   },
 
+  /** Parse a hex color (#rgb or #rrggbb) to {r, g, b} 0-255 */
+  hexToRgb(hex) {
+    hex = (hex || '#000000').replace('#', '');
+    if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+    return {
+      r: parseInt(hex.slice(0, 2), 16),
+      g: parseInt(hex.slice(2, 4), 16),
+      b: parseInt(hex.slice(4, 6), 16),
+    };
+  },
+
+  /** Relative luminance (0 = black, 1 = white) per WCAG */
+  luminance(hex) {
+    const { r, g, b } = this.hexToRgb(hex);
+    const [rs, gs, bs] = [r, g, b].map(c => {
+      c = c / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+  },
+
+  /** Returns true if the color is perceptually light */
+  isLight(hex) {
+    return this.luminance(hex) > 0.35;
+  },
+
+  /** Average two hex colors */
+  averageHex(hex1, hex2) {
+    const a = this.hexToRgb(hex1);
+    const b = this.hexToRgb(hex2);
+    const r = Math.round((a.r + b.r) / 2);
+    const g = Math.round((a.g + b.g) / 2);
+    const bl = Math.round((a.b + b.b) / 2);
+    return '#' + [r, g, bl].map(c => c.toString(16).padStart(2, '0')).join('');
+  },
+
   // ── DOM shortcuts ────────────────────────────────────────────────────────
 
   $(sel, root = document) { return root.querySelector(sel); },

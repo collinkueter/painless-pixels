@@ -22,9 +22,11 @@ const Editor = {
   currentDevice:   'iphone',
   currentTemplate: null,
   currentSlide:    null,
+  _layoutOverrides: null,
 
-  _loadSeq:      0,
-  _onTextChange: null,
+  _loadSeq:        0,
+  _onTextChange:   null,
+  _onLayoutChange: null,
 
   // ── Initialise ────────────────────────────────────────────────────────────
 
@@ -39,6 +41,7 @@ const Editor = {
     });
 
     this._buildStaticLayers();
+    this._wireInteraction();
     this.canvas.renderAll();
 
     // Show the device frame immediately even without a screenshot
@@ -83,6 +86,15 @@ const Editor = {
       editable:   true,
       name:       'headline',
       lockScalingFlip: true,
+      lockScalingX: true,
+      lockScalingY: true,
+      hasControls: true,
+      hasBorders: true,
+    });
+    this.headlineText.setControlsVisibility({
+      ml: false, mr: false, mt: false, mb: false,
+      tl: false, tr: false, bl: false, br: false,
+      mtr: true,
     });
     c.add(this.headlineText);
     this.headlineText.on('changed', () => {
@@ -102,11 +114,106 @@ const Editor = {
       editable:   true,
       name:       'subline',
       lockScalingFlip: true,
+      lockScalingX: true,
+      lockScalingY: true,
+      hasControls: true,
+      hasBorders: true,
+    });
+    this.sublineText.setControlsVisibility({
+      ml: false, mr: false, mt: false, mb: false,
+      tl: false, tr: false, bl: false, br: false,
+      mtr: true,
     });
     c.add(this.sublineText);
     this.sublineText.on('changed', () => {
       if (this._onTextChange) this._onTextChange('subheadline', this.sublineText.text);
     });
+  },
+
+  // ── Canvas Interaction Events ────────────────────────────────────────────
+
+  _wireInteraction() {
+    let frameDragStart = null;
+
+    this.canvas.on('object:moving', (e) => {
+      const obj = e.target;
+      if (obj === this.frameImage && this.phoneImage) {
+        if (!frameDragStart) {
+          frameDragStart = {
+            frameLeft: obj.left,
+            frameTop:  obj.top,
+            phoneLeft: this.phoneImage.left,
+            phoneTop:  this.phoneImage.top,
+          };
+        }
+        const dx = obj.left - frameDragStart.frameLeft;
+        const dy = obj.top  - frameDragStart.frameTop;
+        this.phoneImage.set({
+          left: frameDragStart.phoneLeft + dx,
+          top:  frameDragStart.phoneTop + dy,
+        });
+        this._rebuildPhoneClip();
+        this.phoneImage.setCoords();
+      }
+    });
+
+    this.canvas.on('object:rotating', (e) => {
+      const obj = e.target;
+      if (obj === this.frameImage && this.phoneImage) {
+        this.phoneImage.set('angle', obj.angle);
+        this.phoneImage.setCoords();
+      }
+    });
+
+    this.canvas.on('object:modified', (e) => {
+      frameDragStart = null;
+      const obj = e.target;
+      const w = this.canvas.width;
+      const h = this.canvas.height;
+
+      if (obj === this.frameImage) {
+        if (this._onLayoutChange) {
+          this._onLayoutChange('phone', {
+            xFrac: obj.left / w,
+            yFrac: obj.top / h,
+            angle: Math.round(obj.angle) || 0,
+          });
+        }
+      } else if (obj === this.headlineText) {
+        if (this._onLayoutChange) {
+          this._onLayoutChange('headline', {
+            xFrac: obj.left / w,
+            yFrac: obj.top / h,
+            angle: Math.round(obj.angle) || 0,
+          });
+        }
+      } else if (obj === this.sublineText) {
+        if (this._onLayoutChange) {
+          this._onLayoutChange('subheadline', {
+            xFrac: obj.left / w,
+            yFrac: obj.top / h,
+            angle: Math.round(obj.angle) || 0,
+          });
+        }
+      }
+    });
+  },
+
+  /** Rebuild the absolute-positioned clip path after the phone/frame moves */
+  _rebuildPhoneClip() {
+    if (!this.phoneImage || !this.frameImage) return;
+    const device = this.currentDevice;
+    const design = Devices.DESIGN[device];
+    const frameNatW = this.frameImage.width;
+    const frameTargW = this.frameImage.scaleX * frameNatW;
+    const phonePixelScale = frameTargW / design.w;
+    const screen = Devices.screenForPhone(
+      device,
+      this.frameImage.left,
+      this.frameImage.top,
+      phonePixelScale
+    );
+    this.phoneImage.clipPath = this._screenClipRect(device, screen);
   },
 
   // ── Device Switch ─────────────────────────────────────────────────────────
@@ -164,13 +271,7 @@ const Editor = {
           selectable: false,
           evented:    false,
           name:       'screenshot',
-          clipPath:   new fabric.Rect({
-            width:             screen.w,
-            height:            screen.h,
-            left:              screen.x,
-            top:               screen.y,
-            absolutePositioned: true,
-          }),
+          clipPath:   this._screenClipRect(device, screen),
         });
 
         this.phoneImage = img;
@@ -202,9 +303,18 @@ const Editor = {
           originY:   'center',
           scaleX:    c.width  / img.width,
           scaleY:    c.height / img.height,
-          selectable: false,
-          evented:    false,
+          selectable: true,
+          evented:    true,
           name:       'frame',
+          lockScalingX: true,
+          lockScalingY: true,
+          hasControls: true,
+          hasBorders: true,
+        });
+        img.setControlsVisibility({
+          ml: false, mr: false, mt: false, mb: false,
+          tl: false, tr: false, bl: false, br: false,
+          mtr: true,
         });
 
         this.frameImage = img;
@@ -212,7 +322,7 @@ const Editor = {
         this._reorderLayers();
 
         // Reapply layout now that frame is loaded
-        if (this.currentTemplate) this._applyLayout(this.currentTemplate);
+        if (this.currentTemplate) this._applyLayout(this.currentTemplate, this._layoutOverrides);
         c.renderAll();
       }
       // Note: no crossOrigin for local SVG files
@@ -222,28 +332,30 @@ const Editor = {
   /** Ensure correct z-order: bg → split → phone → frame → headline → subline */
   _reorderLayers() {
     const c = this.canvas;
-    // sendObjectToBack puts item at index 0, pushing others up
+    // sendToBack puts item at index 0, pushing others up
     // Call in REVERSE of desired bottom-up order so bgRect ends at the bottom
-    if (this.frameImage)   c.sendObjectToBack(this.frameImage);
-    if (this.phoneImage)   c.sendObjectToBack(this.phoneImage);
-    if (this.splitRect)    c.sendObjectToBack(this.splitRect);
-    if (this.bgRect)       c.sendObjectToBack(this.bgRect);
+    if (this.frameImage)   c.sendToBack(this.frameImage);
+    if (this.phoneImage)   c.sendToBack(this.phoneImage);
+    if (this.splitRect)    c.sendToBack(this.splitRect);
+    if (this.bgRect)       c.sendToBack(this.bgRect);
     // Text always on top
-    if (this.headlineText) c.bringObjectToFront(this.headlineText);
-    if (this.sublineText)  c.bringObjectToFront(this.sublineText);
+    if (this.headlineText) c.bringToFront(this.headlineText);
+    if (this.sublineText)  c.bringToFront(this.sublineText);
   },
 
   // ── Template Application ──────────────────────────────────────────────────
 
-  applyTemplate(templateId, skipRender = false) {
+  applyTemplate(templateId, skipRender = false, overrides = null) {
     const tmpl = Templates.getById(templateId);
     this.currentTemplate = tmpl;
+    this._layoutOverrides = overrides;
 
     this._applyBackground(tmpl);
-    this._applyLayout(tmpl);
+    this._applyLayout(tmpl, overrides);
+    this._autoFitText();
 
-    this.canvas.bringObjectToFront(this.headlineText);
-    this.canvas.bringObjectToFront(this.sublineText);
+    this.canvas.bringToFront(this.headlineText);
+    this.canvas.bringToFront(this.sublineText);
     if (!skipRender) this.canvas.renderAll();
   },
 
@@ -264,19 +376,25 @@ const Editor = {
       }
     }
 
-    c.sendObjectToBack(this.splitRect);
-    c.sendObjectToBack(this.bgRect);
+    c.sendToBack(this.splitRect);
+    c.sendToBack(this.bgRect);
   },
 
-  _applyLayout(tmpl) {
+  _applyLayout(tmpl, overrides) {
     const c  = this.canvas;
     const w  = c.width;
     const h  = c.height;
+    const ov = overrides || {};
+
+    // Resolve effective phone position
+    const phoneCXFrac = ov.phoneXFrac != null ? ov.phoneXFrac : tmpl.phoneXFrac;
+    const phoneCYFrac = ov.phoneYFrac != null ? ov.phoneYFrac : tmpl.phoneYFrac;
+    const phoneAngle  = ov.phoneAngle || 0;
 
     // ── Position phone & its clip ──────────────────────────────────────────
     if (this.phoneImage) {
-      const phoneCX = w * tmpl.phoneXFrac;
-      const phoneCY = h * tmpl.phoneYFrac;
+      const phoneCX = w * phoneCXFrac;
+      const phoneCY = h * phoneCYFrac;
       const design  = Devices.DESIGN[this.currentDevice];
       const phonePixelScale = (w * tmpl.phoneScale) / design.w;
       const screen = Devices.screenForPhone(
@@ -293,13 +411,8 @@ const Editor = {
         top:    screen.y + screen.h / 2,
         scaleX: scale,
         scaleY: scale,
-        clipPath: new fabric.Rect({
-          width:              screen.w,
-          height:             screen.h,
-          left:               screen.x,
-          top:                screen.y,
-          absolutePositioned: true,
-        }),
+        angle:  phoneAngle,
+        clipPath: this._screenClipRect(this.currentDevice, screen),
       });
 
       // Scale and position frame to match phone position
@@ -315,6 +428,7 @@ const Editor = {
           originY: 'center',
           scaleX:  frameTargW / frameNatW,
           scaleY:  frameTargH / frameNatH,
+          angle:   phoneAngle,
         });
       }
     } else if (this.frameImage) {
@@ -324,12 +438,13 @@ const Editor = {
       const frameTargW = w * tmpl.phoneScale;
       const frameTargH = frameTargW * (frameNatH / frameNatW);
       this.frameImage.set({
-        left:   w * tmpl.phoneXFrac,
-        top:    h * tmpl.phoneYFrac,
+        left:   w * phoneCXFrac,
+        top:    h * phoneCYFrac,
         originX: 'center',
         originY: 'center',
         scaleX:  frameTargW / frameNatW,
         scaleY:  frameTargH / frameNatH,
+        angle:   phoneAngle,
       });
     }
 
@@ -337,27 +452,55 @@ const Editor = {
     const hl = tmpl.headline;
     const sl = tmpl.subheadline;
 
+    const hlXFrac = ov.headlineXFrac != null ? ov.headlineXFrac : hl.xFrac;
+    const hlYFrac = ov.headlineYFrac != null ? ov.headlineYFrac : hl.yFrac;
+    const hlAngle = ov.headlineAngle || 0;
+
     this.headlineText.set({
-      left:       w * hl.xFrac,
-      top:        h * hl.yFrac,
+      left:       w * hlXFrac,
+      top:        h * hlYFrac,
       originX:    hl.align === 'left' ? 'left' : 'center',
       originY:    'center',
       textAlign:  hl.align,
       fontSize:   Math.round(h * hl.sizeFrac),
       fill:       hl.color,
       fontWeight: hl.weight,
+      angle:      hlAngle,
     });
 
+    const slXFrac = ov.subheadlineXFrac != null ? ov.subheadlineXFrac : sl.xFrac;
+    const slYFrac = ov.subheadlineYFrac != null ? ov.subheadlineYFrac : sl.yFrac;
+    const slAngle = ov.subheadlineAngle || 0;
+
     this.sublineText.set({
-      left:       w * sl.xFrac,
-      top:        h * sl.yFrac,
+      left:       w * slXFrac,
+      top:        h * slYFrac,
       originX:    sl.align === 'left' ? 'left' : 'center',
       originY:    'center',
       textAlign:  sl.align,
       fontSize:   Math.round(h * sl.sizeFrac),
       fill:       sl.color,
       fontWeight: sl.weight,
+      angle:      slAngle,
     });
+  },
+
+  // ── Programmatic rotation (from sidebar inputs) ───────────────────────────
+
+  setPhoneAngle(angle) {
+    if (this.frameImage) this.frameImage.set('angle', angle);
+    if (this.phoneImage) this.phoneImage.set('angle', angle);
+    this.canvas.renderAll();
+  },
+
+  setHeadlineAngle(angle) {
+    this.headlineText.set('angle', angle);
+    this.canvas.renderAll();
+  },
+
+  setSublineAngle(angle) {
+    this.sublineText.set('angle', angle);
+    this.canvas.renderAll();
   },
 
   // ── Background Update (from sidebar controls) ─────────────────────────────
@@ -381,8 +524,8 @@ const Editor = {
       }
     }
 
-    c.sendObjectToBack(this.splitRect);
-    c.sendObjectToBack(this.bgRect);
+    c.sendToBack(this.splitRect);
+    c.sendToBack(this.bgRect);
     c.renderAll();
   },
 
@@ -395,7 +538,54 @@ const Editor = {
     if ('textColor' in state) {
       this.headlineText.set('fill', state.textColor);
     }
+    this._autoFitText();
     this.canvas.renderAll();
+  },
+
+  /** Shrink headline/subheadline fontSize if text overflows available width */
+  _autoFitText() {
+    const tmpl = this.currentTemplate;
+    if (!tmpl) return;
+
+    this._autoFitTextObj(this.headlineText, tmpl.headline);
+    this._autoFitTextObj(this.sublineText, tmpl.subheadline);
+  },
+
+  _autoFitTextObj(textObj, cfg) {
+    const tmpl = this.currentTemplate;
+    if (!tmpl) return;
+    const w = this.canvas.width;
+    const maxW = this._textMaxWidth(tmpl, cfg);
+
+    textObj.initDimensions();
+    if (textObj.width > maxW && textObj.width > 0) {
+      const newSize = Math.max(10, Math.floor(textObj.fontSize * (maxW / textObj.width)));
+      textObj.set('fontSize', newSize);
+      textObj.initDimensions();
+    }
+  },
+
+  /** Create a rounded-rect clip path matching the device screen corners */
+  _screenClipRect(device, screen) {
+    const r = screen.w * (Devices.SCREEN_CORNER[device] || 0.04);
+    return new fabric.Rect({
+      width:             screen.w,
+      height:            screen.h,
+      left:              screen.x,
+      top:               screen.y,
+      rx:                r,
+      ry:                r,
+      absolutePositioned: true,
+    });
+  },
+
+  _textMaxWidth(tmpl, cfg) {
+    const w = this.canvas.width;
+    if (cfg.align === 'left') {
+      const phoneLeftEdge = (tmpl.phoneXFrac - tmpl.phoneScale * 0.5) * w;
+      return Math.max(0.25 * w, phoneLeftEdge - cfg.xFrac * w - 16);
+    }
+    return w * 0.85;
   },
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -431,6 +621,23 @@ const Editor = {
       slColor:     this.sublineText.fill,
       slWeight:    this.sublineText.fontWeight,
       slAlign:     this.sublineText.textAlign,
+    };
+  },
+
+  /** Get current layout positions/rotations for export */
+  getLayoutState() {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    return {
+      phoneXFrac:       this.frameImage ? this.frameImage.left / w : null,
+      phoneYFrac:       this.frameImage ? this.frameImage.top / h : null,
+      phoneAngle:       this.frameImage ? (Math.round(this.frameImage.angle) || 0) : 0,
+      headlineXFrac:    this.headlineText.left / w,
+      headlineYFrac:    this.headlineText.top / h,
+      headlineAngle:    Math.round(this.headlineText.angle) || 0,
+      subheadlineXFrac: this.sublineText.left / w,
+      subheadlineYFrac: this.sublineText.top / h,
+      subheadlineAngle: Math.round(this.sublineText.angle) || 0,
     };
   },
 };
