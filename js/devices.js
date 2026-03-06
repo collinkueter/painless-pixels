@@ -31,7 +31,7 @@ const Devices = {
 
   // Screen corner radius as fraction of screen width (measured from frame PNGs)
   SCREEN_CORNER: {
-    iphone:  0.043,
+    iphone:  0.070,
     ipad:    0.017,
     android: 0.04,
   },
