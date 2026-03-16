@@ -121,8 +121,10 @@ const Devices = {
   /**
    * Screen rectangle in preview pixels
    */
-  screenInPreview(device) {
-    return this._screenAt(device, this.PREVIEW[device].w, this.PREVIEW[device].h);
+  screenInPreview(device, orientation) {
+    var p = this.effectivePreview(device, orientation);
+    var f = this.effectiveScreenFracs(device, orientation);
+    return { x: f.x * p.w, y: f.y * p.h, w: f.w * p.w, h: f.h * p.h };
   },
 
   /**
@@ -144,19 +146,64 @@ const Devices = {
    * phoneCenterX/Y: center of the phone on the canvas in preview pixels
    * displayScale:   preview.w / design.w  (same as previewToDesignScale inverted)
    */
-  screenForPhone(device, phoneCenterX, phoneCenterY, displayScale) {
-    const design = this.DESIGN[device];
-    const fracs  = this.SCREEN_FRACS[device];
-    const dw = design.w * displayScale;  // phone display width in canvas pixels
-    const dh = design.h * displayScale;
-    const phoneLeft = phoneCenterX - dw / 2;
-    const phoneTop  = phoneCenterY - dh / 2;
+  screenForPhone(device, phoneCenterX, phoneCenterY, displayScale, orientation) {
+    var design = this.effectiveDesign(device, orientation);
+    var fracs  = this.effectiveScreenFracs(device, orientation);
+    var dw = design.w * displayScale;
+    var dh = design.h * displayScale;
+    var phoneLeft = phoneCenterX - dw / 2;
+    var phoneTop  = phoneCenterY - dh / 2;
     return {
       x: phoneLeft + fracs.x * dw,
       y: phoneTop  + fracs.y * dh,
       w: fracs.w * dw,
       h: fracs.h * dh,
     };
+  },
+
+  /** The native orientation of a device (based on which dimension is larger in DESIGN) */
+  nativeOrientation(device) {
+    var d = this.DESIGN[device];
+    return d.w > d.h ? 'landscape' : 'portrait';
+  },
+
+  /** Returns true if the requested orientation differs from native */
+  isRotated(device, orientation) {
+    return orientation && orientation !== this.nativeOrientation(device);
+  },
+
+  /** Get effective preview dimensions for a device + orientation */
+  effectivePreview(device, orientation) {
+    var p = this.PREVIEW[device];
+    if (this.isRotated(device, orientation)) {
+      return { w: p.h, h: p.w };
+    }
+    return { w: p.w, h: p.h };
+  },
+
+  /** Get effective design dimensions for a device + orientation */
+  effectiveDesign(device, orientation) {
+    var d = this.DESIGN[device];
+    if (this.isRotated(device, orientation)) {
+      return { w: d.h, h: d.w };
+    }
+    return { w: d.w, h: d.h };
+  },
+
+  /** Get effective screen fracs for a device + orientation */
+  effectiveScreenFracs(device, orientation) {
+    var f = this.SCREEN_FRACS[device];
+    if (!this.isRotated(device, orientation)) {
+      return { x: f.x, y: f.y, w: f.w, h: f.h };
+    }
+    // Rotate fracs: the native frame is rotated 90deg, so screen position transforms
+    if (this.nativeOrientation(device) === 'portrait') {
+      // Portrait frame rotated CCW to landscape
+      return { x: f.y, y: 1 - f.x - f.w, w: f.h, h: f.w };
+    } else {
+      // Landscape frame rotated CW to portrait
+      return { x: 1 - f.y - f.h, y: f.x, w: f.h, h: f.w };
+    }
   },
 
   /**

@@ -23,6 +23,7 @@ const Editor = {
   currentTemplate: null,
   currentSlide:    null,
   _layoutOverrides: null,
+  _orientation: 'portrait',
 
   _loadSeq:        0,
   _onTextChange:   null,
@@ -132,11 +133,67 @@ const Editor = {
 
   // ── Canvas Interaction Events ────────────────────────────────────────────
 
+  _guideLines: [],
+  _snapThreshold: 8,
+
+  _clearGuides() {
+    this._guideLines.forEach(l => { this.canvas.remove(l); l.dispose(); });
+    this._guideLines = [];
+  },
+
+  _showGuides(obj) {
+    this._clearGuides();
+    const c = this.canvas;
+    const w = c.width, h = c.height;
+    const bound = obj.getBoundingRect();
+    const objCX = bound.left + bound.width / 2;
+    const objCY = bound.top + bound.height / 2;
+
+    const guides = [
+      { pos: w / 2, axis: 'x' },   // center vertical
+      { pos: h / 2, axis: 'y' },   // center horizontal
+    ];
+
+    const threshold = this._snapThreshold;
+
+    guides.forEach(g => {
+      if (g.axis === 'x' && Math.abs(objCX - g.pos) < threshold) {
+        obj.set('left', obj.left + (g.pos - objCX));
+        const line = new fabric.Line([g.pos, 0, g.pos, h], {
+          stroke: 'rgba(91,95,207,0.5)', strokeWidth: 1,
+          strokeDashArray: [4, 4], selectable: false, evented: false,
+          name: '_guide',
+        });
+        c.add(line);
+        this._guideLines.push(line);
+      }
+      if (g.axis === 'y' && Math.abs(objCY - g.pos) < threshold) {
+        obj.set('top', obj.top + (g.pos - objCY));
+        const line = new fabric.Line([0, g.pos, w, g.pos], {
+          stroke: 'rgba(91,95,207,0.5)', strokeWidth: 1,
+          strokeDashArray: [4, 4], selectable: false, evented: false,
+          name: '_guide',
+        });
+        c.add(line);
+        this._guideLines.push(line);
+      }
+    });
+  },
+
   _wireInteraction() {
     let frameDragStart = null;
 
+    let _guideRAF = null;
     this.canvas.on('object:moving', (e) => {
       const obj = e.target;
+      if (obj === this.headlineText || obj === this.sublineText) {
+        if (!_guideRAF) {
+          _guideRAF = requestAnimationFrame(() => {
+            this._showGuides(obj);
+            _guideRAF = null;
+          });
+        }
+      }
       if (obj === this.frameImage && this.phoneImage) {
         if (!frameDragStart) {
           frameDragStart = {
@@ -165,7 +222,13 @@ const Editor = {
       }
     });
 
+    this.canvas.on('mouse:up', () => {
+      if (_guideRAF) { cancelAnimationFrame(_guideRAF); _guideRAF = null; }
+      this._clearGuides();
+    });
+
     this.canvas.on('object:modified', (e) => {
+      this._clearGuides();
       frameDragStart = null;
       const obj = e.target;
       const w = this.canvas.width;
@@ -203,7 +266,7 @@ const Editor = {
   _rebuildPhoneClip() {
     if (!this.phoneImage || !this.frameImage) return;
     const device = this.currentDevice;
-    const design = Devices.DESIGN[device];
+    const design = Devices.effectiveDesign(device, this._orientation);
     const frameNatW = this.frameImage.width;
     const frameTargW = this.frameImage.scaleX * frameNatW;
     const phonePixelScale = frameTargW / design.w;
@@ -211,16 +274,19 @@ const Editor = {
       device,
       this.frameImage.left,
       this.frameImage.top,
-      phonePixelScale
+      phonePixelScale,
+      this._orientation
     );
     this.phoneImage.clipPath = this._screenClipRect(device, screen);
   },
 
   // ── Device Switch ─────────────────────────────────────────────────────────
 
-  switchDevice(device) {
+  switchDevice(device, orientation) {
+    this._clearGuides();
     this.currentDevice = device;
-    const p = Devices.PREVIEW[device];
+    this._orientation = orientation || 'portrait';
+    const p = Devices.effectivePreview(device, this._orientation);
 
     // Resize canvas
     this.canvas.setWidth(p.w);
@@ -244,7 +310,7 @@ const Editor = {
     this.currentSlide = slide;
     const c = this.canvas;
     const device = this.currentDevice;
-    const screen = Devices.screenInPreview(device);
+    const screen = Devices.screenInPreview(device, this._orientation);
     const seq = ++this._loadSeq;
     const src = imageUrl || slide.imageData;
 
@@ -297,13 +363,18 @@ const Editor = {
       (img) => {
         if (!img) return;
         // Initial positioning — will be overridden by _applyLayout below
+        var rotated = Devices.isRotated(device, this._orientation);
+        var frameAngle = rotated ? (Devices.nativeOrientation(device) === 'portrait' ? -90 : 90) : 0;
+        var effectiveFrameW = rotated ? img.height : img.width;
+        var effectiveFrameH = rotated ? img.width : img.height;
         img.set({
           left:      c.width  / 2,
           top:       c.height / 2,
           originX:   'center',
           originY:   'center',
-          scaleX:    c.width  / img.width,
-          scaleY:    c.height / img.height,
+          scaleX:    c.width  / effectiveFrameW,
+          scaleY:    c.height / effectiveFrameH,
+          angle:     frameAngle,
           selectable: true,
           evented:    true,
           name:       'frame',
@@ -396,10 +467,10 @@ const Editor = {
     if (this.phoneImage) {
       const phoneCX = w * phoneCXFrac;
       const phoneCY = h * phoneCYFrac;
-      const design  = Devices.DESIGN[this.currentDevice];
+      const design  = Devices.effectiveDesign(this.currentDevice, this._orientation);
       const phonePixelScale = (w * tmpl.phoneScale) / design.w;
       const screen = Devices.screenForPhone(
-        this.currentDevice, phoneCX, phoneCY, phonePixelScale
+        this.currentDevice, phoneCX, phoneCY, phonePixelScale, this._orientation
       );
 
       // Cover scale for screenshot
@@ -420,32 +491,39 @@ const Editor = {
       if (this.frameImage) {
         const frameNatW = this.frameImage.width;
         const frameNatH = this.frameImage.height;
+        const rotated = Devices.isRotated(this.currentDevice, this._orientation);
+        const effectiveFrameW = rotated ? frameNatH : frameNatW;
+        const effectiveFrameH = rotated ? frameNatW : frameNatH;
         const frameTargW = w * tmpl.phoneScale;
-        const frameTargH = frameTargW * (frameNatH / frameNatW);
+        const frameTargH = frameTargW * (effectiveFrameH / effectiveFrameW);
+        var baseAngle = rotated ? (Devices.nativeOrientation(this.currentDevice) === 'portrait' ? -90 : 90) : 0;
         this.frameImage.set({
           left:   phoneCX,
           top:    phoneCY,
           originX: 'center',
           originY: 'center',
-          scaleX:  frameTargW / frameNatW,
-          scaleY:  frameTargH / frameNatH,
-          angle:   phoneAngle,
+          scaleX:  frameTargW / effectiveFrameW,
+          scaleY:  frameTargH / effectiveFrameH,
+          angle:   baseAngle + phoneAngle,
         });
       }
     } else if (this.frameImage) {
-      // No screenshot yet, still position frame
       const frameNatW = this.frameImage.width;
       const frameNatH = this.frameImage.height;
+      const rotated = Devices.isRotated(this.currentDevice, this._orientation);
+      const effectiveFrameW = rotated ? frameNatH : frameNatW;
+      const effectiveFrameH = rotated ? frameNatW : frameNatH;
       const frameTargW = w * tmpl.phoneScale;
-      const frameTargH = frameTargW * (frameNatH / frameNatW);
+      const frameTargH = frameTargW * (effectiveFrameH / effectiveFrameW);
+      var baseAngle = rotated ? (Devices.nativeOrientation(this.currentDevice) === 'portrait' ? -90 : 90) : 0;
       this.frameImage.set({
         left:   w * phoneCXFrac,
         top:    h * phoneCYFrac,
         originX: 'center',
         originY: 'center',
-        scaleX:  frameTargW / frameNatW,
-        scaleY:  frameTargH / frameNatH,
-        angle:   phoneAngle,
+        scaleX:  frameTargW / effectiveFrameW,
+        scaleY:  frameTargH / effectiveFrameH,
+        angle:   baseAngle + phoneAngle,
       });
     }
 
@@ -602,6 +680,27 @@ const Editor = {
         { offset: 1, color: to   },
       ],
     });
+  },
+
+  /** Get the canvas element's bounding rect for toolbar positioning */
+  getCanvasBounds() {
+    var el = this.canvas.upperCanvasEl || this.canvas.lowerCanvasEl;
+    return el ? el.getBoundingClientRect() : null;
+  },
+
+  /** Get bounding box of active object in screen coordinates */
+  getActiveObjectScreenBounds() {
+    var obj = this.canvas.getActiveObject();
+    if (!obj) return null;
+    var bound = obj.getBoundingRect();
+    var canvasRect = this.getCanvasBounds();
+    if (!canvasRect) return null;
+    return {
+      left: canvasRect.left + bound.left,
+      top: canvasRect.top + bound.top,
+      width: bound.width,
+      height: bound.height,
+    };
   },
 
   /** Export the current canvas as a data URL */

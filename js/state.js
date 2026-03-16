@@ -13,6 +13,7 @@ var PP = {};
 
   PP.DEFAULTS = {
     activeDevice:  'iphone',
+    orientation:   'portrait',
     templateId:    'bold-dark',
     bgType:        'gradient',
     bgFrom:        '#0d0d0d',
@@ -167,6 +168,7 @@ var PP = {};
       subheadlineXFrac: S.subheadlineXFrac,
       subheadlineYFrac: S.subheadlineYFrac,
       subheadlineAngle: S.subheadlineAngle,
+      orientation:      S.orientation,
     };
   };
 
@@ -198,11 +200,13 @@ var PP = {};
       S.subheadlineXFrac = typeof slide.subheadlineXFrac === 'number' ? slide.subheadlineXFrac : null;
       S.subheadlineYFrac = typeof slide.subheadlineYFrac === 'number' ? slide.subheadlineYFrac : null;
       S.subheadlineAngle = slide.subheadlineAngle ?? 0;
+      S.orientation      = slide.orientation      ?? D.orientation;
     });
   };
 
   /** Save current slide then schedule auto-save + strip render */
   PP.markDirty = function () {
+    if (PP.pushUndo && !PP._applyingSnapshot) PP.pushUndo();
     PP.syncActiveSlide();
     Storage.scheduleSave(PP.State);
     if (PP.debouncedStripRender) PP.debouncedStripRender();

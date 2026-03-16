@@ -90,6 +90,7 @@
       subheadlineXFrac: S.subheadlineXFrac,
       subheadlineYFrac: S.subheadlineYFrac,
       subheadlineAngle: S.subheadlineAngle,
+      orientation:      S.orientation,
     };
   };
 

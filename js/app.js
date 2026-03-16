@@ -60,6 +60,7 @@
     });
     initEditor();
     initExportOverlay();
+    initShortcutsOverlay();
     wireFileOperations();
 
     var saved = null;
@@ -124,6 +125,7 @@
   function restoreState(data) {
     S.slides           = data.slides;
     S.activeDevice     = data.activeDevice || 'iphone';
+    S.orientation      = data.orientation || 'portrait';
     S.activeSlideIndex = Math.min(data.activeSlideIndex || 0, Math.max(0, S.slides.length - 1));
     var active = S.slides[S.activeSlideIndex];
     if (active) PP.loadSlideSettings(active);
@@ -143,10 +145,10 @@
       // Background
       'bgType', 'bgFrom', 'bgTo', 'bgAngle', 'bgSolid',
       // Device
-      'activeDevice',
+      'activeDevice', 'orientation',
     ]);
 
-    Editor.switchDevice(S.activeDevice);
+    Editor.switchDevice(S.activeDevice, S.orientation);
 
     // Template picker
     Templates.renderGrid(
@@ -307,8 +309,182 @@
   // STEP 2 — EDITOR
   // ══════════════════════════════════════════════════════════════════════
 
+  // ── Context Toolbar ──────────────────────────────────────────────
+
+  function wireContextToolbar() {
+    var toolbar   = Utils.$('#context-toolbar');
+    var sizeInput = Utils.$('#ctx-font-size');
+    var colorInput = Utils.$('#ctx-text-color');
+    var colorSwatch = Utils.$('#ctx-color-swatch');
+    var moreBtn   = Utils.$('#ctx-more-btn');
+    if (!toolbar) return;
+
+    var _activeTarget = null; // 'headline' or 'subheadline'
+
+    function showToolbar(obj) {
+      if (obj === Editor.headlineText) _activeTarget = 'headline';
+      else if (obj === Editor.sublineText) _activeTarget = 'subheadline';
+      else { hideToolbar(); return; }
+
+      sizeInput.value = obj.fontSize;
+      colorInput.value = obj.fill && obj.fill.charAt(0) === '#' ? obj.fill : '#ffffff';
+      colorSwatch.style.background = obj.fill || '#ffffff';
+
+      positionToolbar(obj);
+      toolbar.classList.remove('hidden');
+    }
+
+    function hideToolbar() {
+      toolbar.classList.add('hidden');
+      _activeTarget = null;
+    }
+
+    function positionToolbar(obj) {
+      var bounds = Editor.getActiveObjectScreenBounds();
+      if (!bounds) return;
+      var editorLayout = Utils.$('.editor-layout');
+      var layoutRect = editorLayout.getBoundingClientRect();
+
+      var toolbarW = toolbar.offsetWidth || 180;
+      var left = bounds.left + bounds.width / 2 - toolbarW / 2 - layoutRect.left;
+      var top = bounds.top - 44 - layoutRect.top;
+
+      // Clamp to layout bounds
+      left = Math.max(4, Math.min(left, layoutRect.width - toolbarW - 4));
+      if (top < 4) top = bounds.top + bounds.height + 8 - layoutRect.top;
+
+      toolbar.style.left = left + 'px';
+      toolbar.style.top = top + 'px';
+    }
+
+    Editor.canvas.on('selection:created', function (e) { showToolbar(e.selected[0]); });
+    Editor.canvas.on('selection:updated', function (e) { showToolbar(e.selected[0]); });
+    Editor.canvas.on('selection:cleared', hideToolbar);
+    Editor.canvas.on('object:moving', function () {
+      if (_activeTarget) {
+        var obj = _activeTarget === 'headline' ? Editor.headlineText : Editor.sublineText;
+        positionToolbar(obj);
+      }
+    });
+
+    sizeInput.addEventListener('input', function () {
+      var val = parseInt(sizeInput.value, 10);
+      if (!val || val < 10 || !_activeTarget) return;
+      if (_activeTarget === 'headline') {
+        S.headlineSize = val;
+      } else {
+        S.subheadlineSize = val;
+      }
+      PP.debouncedTextUpdate();
+      PP.markDirty();
+    });
+
+    colorInput.addEventListener('input', function () {
+      colorSwatch.style.background = colorInput.value;
+      if (_activeTarget === 'headline') {
+        S.textColor = colorInput.value;
+      } else {
+        S.subheadlineColor = colorInput.value;
+      }
+      PP.debouncedTextUpdate();
+      PP.markDirty();
+    });
+
+    // Click swatch to open native picker
+    colorSwatch.addEventListener('click', function () { colorInput.click(); });
+
+    // Keyboard: Escape dismisses toolbar
+    toolbar.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        hideToolbar();
+        Editor.canvas.discardActiveObject();
+        Editor.canvas.renderAll();
+      }
+    });
+
+    // Keyboard: Space/Enter opens color picker
+    colorSwatch.addEventListener('keydown', function (e) {
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        colorInput.click();
+      }
+    });
+    colorSwatch.setAttribute('tabindex', '0');
+    colorSwatch.setAttribute('role', 'button');
+    colorSwatch.setAttribute('aria-label', 'Pick text color');
+
+    // Reposition on window resize
+    window.addEventListener('resize', function () {
+      if (_activeTarget && !toolbar.classList.contains('hidden')) {
+        var obj = _activeTarget === 'headline' ? Editor.headlineText : Editor.sublineText;
+        positionToolbar(obj);
+      }
+    });
+
+    moreBtn.addEventListener('click', function () {
+      var textSection = Utils.$('[data-section="text"]');
+      if (textSection) {
+        var body = textSection.querySelector('.section-body');
+        var toggle = textSection.querySelector('.section-toggle');
+        if (body && body.classList.contains('collapsed')) {
+          body.classList.remove('collapsed');
+          if (toggle) toggle.setAttribute('aria-expanded', 'true');
+          try {
+            var current = JSON.parse(localStorage.getItem('pp-sidebar-collapsed') || '{}');
+            delete current.text;
+            localStorage.setItem('pp-sidebar-collapsed', JSON.stringify(current));
+          } catch (_) {}
+        }
+        textSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+  }
+
+  // ── Sidebar collapse logic ───────────────────────────────────────
+
+  function wireSidebarCollapse() {
+    var stored = {};
+    try {
+      var raw = localStorage.getItem('pp-sidebar-collapsed');
+      if (raw && raw.length < 1000) stored = JSON.parse(raw);
+    } catch (_) {
+      localStorage.removeItem('pp-sidebar-collapsed');
+    }
+
+    Utils.$$('.section-toggle').forEach(function (btn) {
+      var section = btn.closest('.sidebar-section');
+      var body = section && section.querySelector('.section-body');
+      if (!section || !body) return;
+      var key = section.dataset.section;
+      if (!key) return;
+
+      if (stored[key]) {
+        body.classList.add('collapsed');
+        body.setAttribute('aria-hidden', 'true');
+        btn.setAttribute('aria-expanded', 'false');
+      }
+
+      btn.addEventListener('click', function () {
+        var isCollapsed = body.classList.toggle('collapsed');
+        btn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+        if (isCollapsed) {
+          body.setAttribute('aria-hidden', 'true');
+        } else {
+          body.removeAttribute('aria-hidden');
+        }
+        try {
+          var current = JSON.parse(localStorage.getItem('pp-sidebar-collapsed') || '{}');
+          if (isCollapsed) current[key] = true;
+          else delete current[key];
+          localStorage.setItem('pp-sidebar-collapsed', JSON.stringify(current));
+        } catch (_) {}
+      });
+    });
+  }
+
   function initEditor() {
     Editor.init(Utils.$('#main-canvas'));
+    wireSidebarCollapse();
 
     // Render template grid
     Templates.renderGrid(
@@ -324,6 +500,10 @@
     PP.wireBgControls();
     PP.wireSlidePanel();
     wireHeaderBtns();
+    wireApplyAll();
+
+    // Context toolbar
+    wireContextToolbar();
 
     // Sync canvas IText edits back to State
     Editor._onTextChange = function (key, value) {
@@ -417,6 +597,56 @@
     PP.markDirty();
   }
 
+  // ── Apply to All ─────────────────────────────────────────────────────
+
+  function wireApplyAll() {
+    var tplBtn = Utils.$('#apply-template-all');
+    var bgBtn  = Utils.$('#apply-bg-all');
+
+    if (tplBtn) {
+      tplBtn.addEventListener('click', function () {
+        var settings = PP.captureCurrentSettings();
+        S.slides.forEach(function (slide) {
+          slide.templateId = settings.templateId;
+          slide.phoneXFrac = null; slide.phoneYFrac = null; slide.phoneAngle = 0;
+          slide.headlineXFrac = null; slide.headlineYFrac = null; slide.headlineAngle = 0;
+          slide.subheadlineXFrac = null; slide.subheadlineYFrac = null; slide.subheadlineAngle = 0;
+        });
+        PP.renderCanvasStrip();
+        PP.markDirty();
+        flashApplyAll(tplBtn);
+      });
+    }
+
+    if (bgBtn) {
+      bgBtn.addEventListener('click', function () {
+        var settings = PP.captureCurrentSettings();
+        S.slides.forEach(function (slide) {
+          slide.bgType        = settings.bgType;
+          slide.bgFrom        = settings.bgFrom;
+          slide.bgTo          = settings.bgTo;
+          slide.bgAngle       = settings.bgAngle;
+          slide.bgSolid       = settings.bgSolid;
+          slide.bgSplitTop    = settings.bgSplitTop;
+          slide.bgSplitBottom = settings.bgSplitBottom;
+        });
+        PP.renderCanvasStrip();
+        PP.markDirty();
+        flashApplyAll(bgBtn);
+      });
+    }
+  }
+
+  function flashApplyAll(btn) {
+    var orig = btn.textContent;
+    btn.textContent = 'Applied!';
+    btn.style.color = 'var(--success)';
+    setTimeout(function () {
+      btn.textContent = orig;
+      btn.style.color = '';
+    }, 1500);
+  }
+
   // ── Header Buttons ────────────────────────────────────────────────────
 
   function wireHeaderBtns() {
@@ -426,6 +656,55 @@
   // ══════════════════════════════════════════════════════════════════════
   // STEP 3 — EXPORT
   // ══════════════════════════════════════════════════════════════════════
+
+  function initShortcutsOverlay() {
+    var overlay = Utils.$('#shortcuts-overlay');
+    var panel = overlay ? overlay.querySelector('.overlay-panel') : null;
+    var close = Utils.$('#shortcuts-close');
+    var backdrop = Utils.$('#shortcuts-backdrop');
+    var hintBtn = Utils.$('#shortcuts-hint-btn');
+    var _previousFocus = null;
+
+    function openShortcuts() {
+      _previousFocus = document.activeElement;
+      Utils.show(overlay);
+      if (close) close.focus();
+    }
+
+    function closeShortcuts() {
+      Utils.hide(overlay);
+      if (_previousFocus && _previousFocus.focus) _previousFocus.focus();
+      _previousFocus = null;
+    }
+
+    if (close) close.addEventListener('click', closeShortcuts);
+    if (backdrop) backdrop.addEventListener('click', closeShortcuts);
+    if (hintBtn) hintBtn.addEventListener('click', openShortcuts);
+
+    // Focus trap
+    if (panel) {
+      panel.addEventListener('keydown', function (e) {
+        if (e.key !== 'Tab') return;
+        var focusable = panel.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable.length) return;
+        var first = focusable[0];
+        var last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      });
+    }
+
+    // Expose for keyboard shortcut handler
+    PP._openShortcuts = openShortcuts;
+    PP._closeShortcuts = closeShortcuts;
+  }
 
   function initExportOverlay() {
     Utils.$('#export-close').addEventListener('click', closeExportOverlay);
@@ -667,6 +946,18 @@
   document.addEventListener('keydown', function (e) {
     var editorActive = Utils.$('#step-editor').classList.contains('active');
 
+    // Undo/Redo
+    if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      if (editorActive) PP.undo();
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'Z' || (e.key === 'z' && e.shiftKey))) {
+      e.preventDefault();
+      if (editorActive) PP.redo();
+      return;
+    }
+
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
       e.preventDefault();
       if (editorActive) saveDesignToFile();
@@ -685,10 +976,25 @@
     if (e.key === 'Escape') {
       var dropdown = Utils.$('#new-design-dropdown');
       if (dropdown) { dropdown.remove(); return; }
+      var shortcutsOvl = Utils.$('#shortcuts-overlay');
+      if (shortcutsOvl && !shortcutsOvl.classList.contains('hidden')) {
+        if (PP._closeShortcuts) PP._closeShortcuts();
+        return;
+      }
       closeExportOverlay();
     }
 
     if (_isFocusedOnInput()) return;
+
+    if (e.key === '?' && editorActive) {
+      var shortcutsOvl = Utils.$('#shortcuts-overlay');
+      if (shortcutsOvl && shortcutsOvl.classList.contains('hidden')) {
+        if (PP._openShortcuts) PP._openShortcuts();
+      } else {
+        if (PP._closeShortcuts) PP._closeShortcuts();
+      }
+      return;
+    }
 
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       if (editorActive && S.slides.length > 1) {

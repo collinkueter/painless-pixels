@@ -114,6 +114,7 @@ const Storage = (function () {
       subheadlineXFrac: s.subheadlineXFrac,
       subheadlineYFrac: s.subheadlineYFrac,
       subheadlineAngle: s.subheadlineAngle,
+      orientation:      s.orientation || 'portrait',
     };
   }
 
@@ -130,6 +131,7 @@ const Storage = (function () {
       slides:           slides,
       activeSlideIndex: state.activeSlideIndex,
       activeDevice:     state.activeDevice,
+      orientation:      state.orientation || 'portrait',
       templateId:       state.templateId,
       bgType:           state.bgType,
       bgFrom:           state.bgFrom,
@@ -265,6 +267,7 @@ const Storage = (function () {
       subheadlineXFrac: typeof s.subheadlineXFrac === 'number' ? s.subheadlineXFrac : null,
       subheadlineYFrac: typeof s.subheadlineYFrac === 'number' ? s.subheadlineYFrac : null,
       subheadlineAngle: typeof s.subheadlineAngle === 'number' ? s.subheadlineAngle : 0,
+      orientation:      s.orientation || data.orientation || 'portrait',
     };
   }
 
@@ -296,6 +299,7 @@ const Storage = (function () {
       slides:           slides,
       activeSlideIndex: typeof data.activeSlideIndex === 'number' ? data.activeSlideIndex : 0,
       activeDevice:     data.activeDevice || defaults.activeDevice || 'iphone',
+      orientation:      data.orientation || 'portrait',
     };
   }
 

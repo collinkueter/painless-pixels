@@ -139,6 +139,7 @@
           </svg>
           Add Screenshots
         </button>
+        <button class="shortcuts-hint" id="shortcuts-hint-btn" title="Press ? to see all shortcuts" type="button">?</button>
         <button class="btn-accent" id="export-btn" aria-label="Export all sizes">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M7 1V9M7 9L4 6M7 9L10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -154,141 +155,216 @@
       <!-- Left Sidebar -->
       <aside class="sidebar" id="sidebar">
 
-        <div class="sidebar-section">
-          <div class="section-label">Device</div>
-          <div class="form-factor-toggle" role="group" aria-label="Form factor">
-            <button class="form-factor-btn active" data-factor="phone" aria-pressed="true">Phone</button>
-            <button class="form-factor-btn" data-factor="tablet" aria-pressed="false">Tablet</button>
-          </div>
-          <div class="field-group">
-            <select class="field-input" id="device-select">
-              <!-- Populated dynamically -->
-            </select>
-          </div>
-        </div>
-
-        <div class="sidebar-section">
-          <div class="section-label">Template</div>
-          <div class="template-grid" id="template-grid" role="group" aria-label="Templates">
-            <!-- Injected by templates.js init -->
-          </div>
-        </div>
-
-        <div class="sidebar-section">
-          <div class="section-label">Text</div>
-          <div class="field-group">
-            <label class="field-label" for="headline-input">Headline</label>
-            <input type="text" class="field-input" id="headline-input" placeholder="Your App Headline" maxlength="60">
-          </div>
-          <div class="field-row">
-            <div class="field-group half">
-              <label class="field-label" for="headline-size">Size</label>
-              <input type="number" class="field-input mono" id="headline-size" value="38" min="10" max="120">
-            </div>
-            <div class="field-group half">
-              <label class="field-label" for="text-color">Color</label>
-              <div class="color-swatch-wrap">
-                <input type="color" id="text-color" value="#ffffff">
-                <span class="color-hex" id="text-color-hex">#ffffff</span>
-              </div>
-            </div>
-          </div>
-          <div class="field-group">
-            <label class="field-label" for="subheadline-input">Subheadline</label>
-            <input type="text" class="field-input" id="subheadline-input" placeholder="The perfect description" maxlength="100">
-          </div>
-          <div class="field-row">
-            <div class="field-group half">
-              <label class="field-label" for="subheadline-size">Size</label>
-              <input type="number" class="field-input mono" id="subheadline-size" value="20" min="10" max="120">
-            </div>
-            <div class="field-group half">
-              <label class="field-label" for="subheadline-color">Color</label>
-              <div class="color-swatch-wrap">
-                <input type="color" id="subheadline-color" value="#aaaaaa">
-                <span class="color-hex" id="subheadline-color-hex">#aaaaaa</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="sidebar-section">
-          <div class="section-label">Layout</div>
-          <div class="field-row">
-            <div class="field-group third">
-              <label class="field-label" for="phone-angle">Device</label>
-              <div class="angle-input-wrap">
-                <input type="number" class="field-input mono" id="phone-angle" value="0" min="-360" max="360" step="1">
-                <span class="angle-suffix">°</span>
-              </div>
-            </div>
-            <div class="field-group third">
-              <label class="field-label" for="headline-angle">Headline</label>
-              <div class="angle-input-wrap">
-                <input type="number" class="field-input mono" id="headline-angle" value="0" min="-360" max="360" step="1">
-                <span class="angle-suffix">°</span>
-              </div>
-            </div>
-            <div class="field-group third">
-              <label class="field-label" for="subline-angle">Subline</label>
-              <div class="angle-input-wrap">
-                <input type="number" class="field-input mono" id="subline-angle" value="0" min="-360" max="360" step="1">
-                <span class="angle-suffix">°</span>
-              </div>
-            </div>
-          </div>
-          <button class="btn-ghost reset-layout-btn" id="reset-layout-btn">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-              <path d="M2 6a4 4 0 1 1 .5 1.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-              <path d="M2 9V6H5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <div class="sidebar-section" data-section="device">
+          <button class="section-label section-toggle" type="button" aria-expanded="true">
+            Device
+            <svg class="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M3 4L5 6L7 4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Reset Layout
           </button>
+          <div class="section-body">
+            <div class="form-factor-toggle" role="group" aria-label="Form factor">
+              <button class="form-factor-btn active" data-factor="phone" aria-pressed="true">Phone</button>
+              <button class="form-factor-btn" data-factor="tablet" aria-pressed="false">Tablet</button>
+            </div>
+            <div class="orientation-toggle" role="group" aria-label="Orientation">
+              <button class="orientation-btn active" data-orientation="portrait" aria-pressed="true">
+                <svg width="10" height="14" viewBox="0 0 10 14" fill="none" aria-hidden="true">
+                  <rect x="0.5" y="0.5" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1"/>
+                </svg>
+                Portrait
+              </button>
+              <button class="orientation-btn" data-orientation="landscape" aria-pressed="false">
+                <svg width="14" height="10" viewBox="0 0 14 10" fill="none" aria-hidden="true">
+                  <rect x="0.5" y="0.5" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1"/>
+                </svg>
+                Landscape
+              </button>
+            </div>
+            <div class="field-group">
+              <select class="field-input" id="device-select">
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+          </div>
         </div>
 
-        <div class="sidebar-section">
-          <div class="section-label">Background</div>
-          <div class="bg-toggle" role="group" aria-label="Background type">
-            <button class="bg-toggle-btn active" data-bg="gradient" aria-pressed="true">Gradient</button>
-            <button class="bg-toggle-btn" data-bg="solid" aria-pressed="false">Solid</button>
+        <div class="sidebar-section" data-section="template">
+          <button class="section-label section-toggle" type="button" aria-expanded="true">
+            Template
+            <svg class="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M3 4L5 6L7 4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="section-body">
+            <div class="template-grid" id="template-grid" role="group" aria-label="Templates">
+              <!-- Injected by templates.js init -->
+            </div>
+            <button class="apply-all-link" id="apply-template-all" type="button">Apply template to all slides</button>
           </div>
+        </div>
 
-          <div id="bg-gradient-pane" class="bg-pane active">
+        <div class="sidebar-section" data-section="text">
+          <button class="section-label section-toggle" type="button" aria-expanded="true">
+            Text
+            <svg class="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M3 4L5 6L7 4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="section-body">
+            <div class="field-group">
+              <label class="field-label" for="headline-input">Headline</label>
+              <input type="text" class="field-input" id="headline-input" placeholder="Your App Headline" maxlength="60">
+            </div>
             <div class="field-row">
               <div class="field-group half">
-                <label class="field-label" for="bg-from">From</label>
-                <div class="color-swatch-wrap">
-                  <input type="color" id="bg-from" value="#6366f1">
-                  <span class="color-hex" id="bg-from-hex">#6366f1</span>
-                </div>
+                <label class="field-label" for="headline-size">Size</label>
+                <input type="number" class="field-input mono" id="headline-size" value="38" min="10" max="120">
               </div>
               <div class="field-group half">
-                <label class="field-label" for="bg-to">To</label>
+                <label class="field-label" for="text-color">Color</label>
                 <div class="color-swatch-wrap">
-                  <input type="color" id="bg-to" value="#0a0a0a">
-                  <span class="color-hex" id="bg-to-hex">#0a0a0a</span>
+                  <input type="color" id="text-color" value="#ffffff">
+                  <span class="color-hex" id="text-color-hex">#ffffff</span>
                 </div>
               </div>
             </div>
             <div class="field-group">
-              <label class="field-label" for="bg-angle">Angle <span id="angle-display" class="mono">135°</span></label>
-              <input type="range" class="range-input" id="bg-angle" min="0" max="360" value="135">
+              <label class="field-label" for="subheadline-input">Subheadline</label>
+              <input type="text" class="field-input" id="subheadline-input" placeholder="The perfect description" maxlength="100">
             </div>
-          </div>
-
-          <div id="bg-solid-pane" class="bg-pane">
-            <div class="field-group">
-              <label class="field-label" for="bg-solid">Color</label>
-              <div class="color-swatch-wrap">
-                <input type="color" id="bg-solid" value="#6366f1">
-                <span class="color-hex" id="bg-solid-hex">#6366f1</span>
+            <div class="field-row">
+              <div class="field-group half">
+                <label class="field-label" for="subheadline-size">Size</label>
+                <input type="number" class="field-input mono" id="subheadline-size" value="20" min="10" max="120">
+              </div>
+              <div class="field-group half">
+                <label class="field-label" for="subheadline-color">Color</label>
+                <div class="color-swatch-wrap">
+                  <input type="color" id="subheadline-color" value="#aaaaaa">
+                  <span class="color-hex" id="subheadline-color-hex">#aaaaaa</span>
+                </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div class="sidebar-section" data-section="layout">
+          <button class="section-label section-toggle" type="button" aria-expanded="true">
+            Layout
+            <svg class="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M3 4L5 6L7 4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="section-body">
+            <div class="field-row">
+              <div class="field-group third">
+                <label class="field-label" for="phone-angle">Device</label>
+                <div class="angle-input-wrap">
+                  <input type="number" class="field-input mono" id="phone-angle" value="0" min="-360" max="360" step="1">
+                  <span class="angle-suffix">°</span>
+                </div>
+              </div>
+              <div class="field-group third">
+                <label class="field-label" for="headline-angle">Headline</label>
+                <div class="angle-input-wrap">
+                  <input type="number" class="field-input mono" id="headline-angle" value="0" min="-360" max="360" step="1">
+                  <span class="angle-suffix">°</span>
+                </div>
+              </div>
+              <div class="field-group third">
+                <label class="field-label" for="subline-angle">Subline</label>
+                <div class="angle-input-wrap">
+                  <input type="number" class="field-input mono" id="subline-angle" value="0" min="-360" max="360" step="1">
+                  <span class="angle-suffix">°</span>
+                </div>
+              </div>
+            </div>
+            <button class="btn-ghost reset-layout-btn" id="reset-layout-btn">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 6a4 4 0 1 1 .5 1.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M2 9V6H5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Reset Layout
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebar-section" data-section="background">
+          <button class="section-label section-toggle" type="button" aria-expanded="true">
+            Background
+            <svg class="section-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M3 4L5 6L7 4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="section-body">
+            <div class="bg-presets-row" id="bg-presets" role="group" aria-label="Background presets"></div>
+            <div class="bg-toggle" role="group" aria-label="Background type">
+              <button class="bg-toggle-btn active" data-bg="gradient" aria-pressed="true">Gradient</button>
+              <button class="bg-toggle-btn" data-bg="solid" aria-pressed="false">Solid</button>
+            </div>
+
+            <div id="bg-gradient-pane" class="bg-pane active">
+              <div class="field-row">
+                <div class="field-group half">
+                  <label class="field-label" for="bg-from">From</label>
+                  <div class="color-swatch-wrap">
+                    <input type="color" id="bg-from" value="#6366f1">
+                    <span class="color-hex" id="bg-from-hex">#6366f1</span>
+                  </div>
+                </div>
+                <div class="field-group half">
+                  <label class="field-label" for="bg-to">To</label>
+                  <div class="color-swatch-wrap">
+                    <input type="color" id="bg-to" value="#0a0a0a">
+                    <span class="color-hex" id="bg-to-hex">#0a0a0a</span>
+                  </div>
+                </div>
+              </div>
+              <div class="field-group">
+                <label class="field-label" for="bg-angle">Angle <span id="angle-display" class="mono">135°</span></label>
+                <input type="range" class="range-input" id="bg-angle" min="0" max="360" value="135">
+              </div>
+            </div>
+
+            <div id="bg-solid-pane" class="bg-pane">
+              <div class="field-group">
+                <label class="field-label" for="bg-solid">Color</label>
+                <div class="color-swatch-wrap">
+                  <input type="color" id="bg-solid" value="#6366f1">
+                  <span class="color-hex" id="bg-solid-hex">#6366f1</span>
+                </div>
+              </div>
+            </div>
+            <button class="apply-all-link" id="apply-bg-all" type="button">Apply background to all slides</button>
           </div>
         </div>
 
         <input type="file" id="add-file-input" accept="image/*" multiple hidden>
       </aside>
+
+      <!-- Floating Context Toolbar -->
+      <div class="context-toolbar hidden" id="context-toolbar" role="toolbar" aria-label="Text formatting">
+        <label class="ctx-field" title="Font size">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M2 10L6 2L10 10M3.5 7H8.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <input type="number" class="ctx-size-input" id="ctx-font-size" min="10" max="120" step="1">
+        </label>
+        <div class="ctx-divider"></div>
+        <label class="ctx-field ctx-color-field" title="Text color">
+          <input type="color" class="ctx-color-input" id="ctx-text-color">
+          <span class="ctx-color-swatch" id="ctx-color-swatch"></span>
+        </label>
+        <div class="ctx-divider"></div>
+        <button class="ctx-btn" id="ctx-more-btn" title="More text options">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <circle cx="2" cy="6" r="1" fill="currentColor"/>
+            <circle cx="6" cy="6" r="1" fill="currentColor"/>
+            <circle cx="10" cy="6" r="1" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
 
       <!-- Canvas Area -->
       <main class="canvas-area" id="canvas-area">
@@ -385,6 +461,31 @@
     </div>
   </div>
 
+  <!-- ───────────────────────── SHORTCUTS OVERLAY ───────────────────────── -->
+  <div id="shortcuts-overlay" class="overlay hidden">
+    <div class="overlay-backdrop" id="shortcuts-backdrop"></div>
+    <div class="overlay-panel shortcuts-panel" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
+      <div class="overlay-header">
+        <h2 class="overlay-title" id="shortcuts-title">Keyboard Shortcuts</h2>
+        <button class="overlay-close" id="shortcuts-close" aria-label="Close shortcuts">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 3L13 13M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="shortcuts-grid">
+        <div class="shortcut-row"><kbd>Cmd+Z</kbd><span>Undo</span></div>
+        <div class="shortcut-row"><kbd>Cmd+Shift+Z</kbd><span>Redo</span></div>
+        <div class="shortcut-row"><kbd>Cmd+S</kbd><span>Download .pp file</span></div>
+        <div class="shortcut-row"><kbd>Cmd+O</kbd><span>Open .pp file</span></div>
+        <div class="shortcut-row"><kbd>Cmd+E</kbd><span>Export all sizes</span></div>
+        <div class="shortcut-row"><kbd>Arrow Left/Right</kbd><span>Switch slides</span></div>
+        <div class="shortcut-row"><kbd>Esc</kbd><span>Close overlay</span></div>
+        <div class="shortcut-row"><kbd>?</kbd><span>Show this overlay</span></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts — order matters -->
   <script src="vendor/fabric.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
@@ -400,6 +501,9 @@
 
   <!-- State + reactive layer (before controls) -->
   <script src="js/state.js"></script>
+
+  <!-- Undo/Redo -->
+  <script src="js/undo.js"></script>
 
   <!-- Control modules -->
   <script src="js/controls-text.js"></script>

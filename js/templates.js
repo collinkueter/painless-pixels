@@ -255,10 +255,38 @@ const Templates = {
       el.dataset.templateId = tmpl.id;
       el.setAttribute('aria-pressed', tmpl.id === activeId ? 'true' : 'false');
       el.setAttribute('aria-label', tmpl.name);
-      el.innerHTML = `
-        <div class="template-swatch-bg" style="background:${tmpl.preview}"></div>
-        <span class="template-swatch-label" aria-hidden="true">${tmpl.name}</span>
-      `;
+
+      // Build mini layout preview
+      const phoneX = (tmpl.phoneXFrac * 100).toFixed(0);
+      const phoneY = (tmpl.phoneYFrac * 100).toFixed(0);
+      const phoneW = (tmpl.phoneScale * 36).toFixed(0);
+      const phoneH = (tmpl.phoneScale * 70).toFixed(0);
+      const hlX = (tmpl.headline.xFrac * 100).toFixed(0);
+      const hlY = (tmpl.headline.yFrac * 100).toFixed(0);
+      const slX = (tmpl.subheadline.xFrac * 100).toFixed(0);
+      const slY = (tmpl.subheadline.yFrac * 100).toFixed(0);
+      const hlAlign = tmpl.headline.align === 'left' ? 'left' : 'center';
+
+      var alignClass = hlAlign === 'left' ? ' align-left' : '';
+      var bgDiv = document.createElement('div');
+      bgDiv.className = 'template-swatch-bg';
+      bgDiv.style.background = tmpl.preview;
+      el.appendChild(bgDiv);
+
+      var layoutDiv = document.createElement('div');
+      layoutDiv.className = 'template-preview-layout';
+      layoutDiv.innerHTML =
+        '<div class="tpl-phone" style="left:' + phoneX + '%;top:' + phoneY + '%;width:' + phoneW + 'px;height:' + phoneH + 'px"></div>' +
+        '<div class="tpl-text-hl' + alignClass + '" style="left:' + hlX + '%;top:' + hlY + '%"></div>' +
+        '<div class="tpl-text-sl' + alignClass + '" style="left:' + slX + '%;top:' + slY + '%"></div>';
+      el.appendChild(layoutDiv);
+
+      var labelSpan = document.createElement('span');
+      labelSpan.className = 'template-swatch-label';
+      labelSpan.setAttribute('aria-hidden', 'true');
+      labelSpan.textContent = tmpl.name;
+      el.appendChild(labelSpan);
+
       el.addEventListener('click', () => {
         container.querySelectorAll('.template-swatch').forEach(s => {
           s.classList.remove('active');

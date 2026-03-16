@@ -9,6 +9,21 @@
 
   var S = PP.State;
 
+  var BG_PRESETS = [
+    { label: 'Indigo Night',  type: 'gradient', from: '#0d0d0d', to: '#18103a', angle: 145 },
+    { label: 'Purple Haze',   type: 'gradient', from: '#5b5fcf', to: '#a855f7', angle: 140 },
+    { label: 'Ocean',         type: 'gradient', from: '#0369a1', to: '#06b6d4', angle: 135 },
+    { label: 'Sunset',        type: 'gradient', from: '#f43f5e', to: '#fb923c', angle: 135 },
+    { label: 'Forest',        type: 'gradient', from: '#065f46', to: '#34d399', angle: 145 },
+    { label: 'Midnight',      type: 'gradient', from: '#040410', to: '#0c0c28', angle: 180 },
+    { label: 'Peach',         type: 'gradient', from: '#fbbf24', to: '#f472b6', angle: 135 },
+    { label: 'Cool Slate',    type: 'gradient', from: '#334155', to: '#1e293b', angle: 180 },
+    { label: 'Rose',          type: 'gradient', from: '#be123c', to: '#881337', angle: 160 },
+    { label: 'Black',         type: 'solid', color: '#0a0a0a' },
+    { label: 'White',         type: 'solid', color: '#f8f8f8' },
+    { label: 'Deep Indigo',   type: 'solid', color: '#1e1b4b' },
+  ];
+
   var debouncedBgUpdate = Utils.debounce(function () {
     Editor.updateBackground({
       bgType:        S.bgType,
@@ -38,22 +53,78 @@
     var solidEl      = Utils.$('#bg-solid');
     var solidHex     = Utils.$('#bg-solid-hex');
 
+    // ── Presets row ─────────────────────────────────────────────────
+    var presetsContainer = Utils.$('#bg-presets');
+    if (presetsContainer) {
+      BG_PRESETS.forEach(function (preset, i) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'bg-preset-chip';
+        chip.setAttribute('aria-label', preset.label);
+        chip.setAttribute('role', 'radio');
+        chip.setAttribute('aria-checked', 'false');
+        chip.title = preset.label;
+        if (preset.type === 'gradient') {
+          chip.style.background = 'linear-gradient(' + preset.angle + 'deg, ' + preset.from + ', ' + preset.to + ')';
+        } else {
+          chip.style.background = preset.color;
+        }
+        if (preset.type === 'solid' && Utils.isLight(preset.color)) {
+          chip.classList.add('light-preset');
+        }
+        chip.addEventListener('click', function () {
+          presetsContainer.querySelectorAll('.bg-preset-chip').forEach(function (c) {
+            c.classList.remove('active');
+          });
+          chip.classList.add('active');
+          chip.setAttribute('aria-checked', 'true');
+          S._batch(function () {
+            if (preset.type === 'gradient') {
+              S.bgType  = 'gradient';
+              S.bgFrom  = preset.from;
+              S.bgTo    = preset.to;
+              S.bgAngle = preset.angle;
+            } else {
+              S.bgType  = 'solid';
+              S.bgSolid = preset.color;
+            }
+          });
+          applyBgUpdate();
+        });
+        presetsContainer.appendChild(chip);
+      });
+    }
+
     // ── Subscriptions (replace syncBgControls) ──────────────────────
+
+    function clearPresetActive() {
+      if (presetsContainer) {
+        presetsContainer.querySelectorAll('.bg-preset-chip').forEach(function (c) {
+          c.classList.remove('active');
+          c.setAttribute('aria-checked', 'false');
+        });
+      }
+    }
+
     S._subscribe('bgFrom', function (val) {
       if (fromEl)  fromEl.value = val;
       if (fromHex) fromHex.textContent = val;
+      clearPresetActive();
     });
     S._subscribe('bgTo', function (val) {
       if (toEl)  toEl.value = val;
       if (toHex) toHex.textContent = val;
+      clearPresetActive();
     });
     S._subscribe('bgAngle', function (val) {
       if (angleEl)      angleEl.value = val;
       if (angleDisplay) angleDisplay.textContent = val + '\u00B0';
+      clearPresetActive();
     });
     S._subscribe('bgSolid', function (val) {
       if (solidEl)  solidEl.value = val;
       if (solidHex) solidHex.textContent = val;
+      clearPresetActive();
     });
     S._subscribe('bgType', function (val) {
       Utils.$('#bg-gradient-pane').classList.toggle('active', val === 'gradient');

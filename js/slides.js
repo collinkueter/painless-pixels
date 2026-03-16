@@ -18,7 +18,7 @@
     var container = Utils.$('#canvas-container');
     var wrapper   = Utils.$('#canvas-wrapper');
     var slides    = S.slides;
-    var preview   = Devices.PREVIEW[S.activeDevice];
+    var preview   = Devices.effectivePreview(S.activeDevice, S.orientation);
 
     // Detach canvas-wrapper before clearing innerHTML so Fabric.js survives
     wrapper.remove();
@@ -82,7 +82,7 @@
     if (!slides.length) return;
 
     var device  = S.activeDevice;
-    var preview = Devices.PREVIEW[device];
+    var preview = Devices.effectivePreview(device, S.orientation);
     var spec    = { w: preview.w, h: preview.h };
     var isTablet = Devices.isTablet(device);
 
@@ -115,6 +115,7 @@
         phoneXFrac: slide.phoneXFrac, phoneYFrac: slide.phoneYFrac, phoneAngle: slide.phoneAngle,
         headlineXFrac: slide.headlineXFrac, headlineYFrac: slide.headlineYFrac, headlineAngle: slide.headlineAngle,
         subheadlineXFrac: slide.subheadlineXFrac, subheadlineYFrac: slide.subheadlineYFrac, subheadlineAngle: slide.subheadlineAngle,
+        orientation: S.orientation || slide.orientation || 'portrait',
       };
 
       var imgSrc = (isTablet && slide.tabletImageData) ? slide.tabletImageData : slide.imageData;
@@ -258,7 +259,14 @@
     PP.markDirty();
   }
 
+  var _deletedSlide = null;
+  var _deleteToast = null;
+  var _deleteTimer = null;
+
   function deleteSlide(idx) {
+    // Save for undo
+    _deletedSlide = { slide: S.slides[idx], index: idx };
+
     S.slides.splice(idx, 1);
     if (S.activeSlideIndex >= S.slides.length) {
       S.activeSlideIndex = Math.max(0, S.slides.length - 1);
@@ -270,14 +278,78 @@
     PP.renderCanvasStrip();
     PP.updateExportCounts();
     PP.markDirty();
+
+    showDeleteToast();
   }
+
+  function showDeleteToast() {
+    if (_deleteToast && _deleteToast.parentNode) _deleteToast.remove();
+    if (_deleteTimer) clearTimeout(_deleteTimer);
+
+    _deleteToast = document.createElement('div');
+    _deleteToast.className = 'restore-banner';
+    _deleteToast.setAttribute('role', 'status');
+    _deleteToast.setAttribute('aria-live', 'polite');
+    _deleteToast.setAttribute('aria-atomic', 'true');
+    _deleteToast.innerHTML =
+      '<span>Slide deleted</span>' +
+      '<button class="restore-banner-btn" id="undo-delete-btn" aria-label="Undo slide deletion">Undo</button>' +
+      '<button class="restore-banner-close" aria-label="Dismiss">' +
+        '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 2L8 8M8 2L2 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>' +
+      '</button>';
+
+    document.body.appendChild(_deleteToast);
+
+    _deleteToast.querySelector('#undo-delete-btn').addEventListener('click', function () {
+      if (_deletedSlide) {
+        var i = Math.min(_deletedSlide.index, S.slides.length);
+        S.slides.splice(i, 0, _deletedSlide.slide);
+        S.activeSlideIndex = i;
+        _deletedSlide = null;
+        PP.renderSlideList();
+        PP.loadActiveSlide();
+        PP.renderCanvasStrip();
+        PP.updateExportCounts();
+        PP.markDirty();
+      }
+      dismissDeleteToast();
+    });
+
+    _deleteToast.querySelector('.restore-banner-close').addEventListener('click', dismissDeleteToast);
+
+    _deleteTimer = setTimeout(function () {
+      if (_deleteToast && _deleteToast.parentNode) {
+        dismissDeleteToast();
+      }
+    }, 5000);
+  }
+
+  function dismissDeleteToast() {
+    if (_deleteTimer) { clearTimeout(_deleteTimer); _deleteTimer = null; }
+    if (_deleteToast && _deleteToast.parentNode) _deleteToast.remove();
+    _deleteToast = null;
+    _deletedSlide = null;
+  }
+
+  // Expose for undo system to dismiss toast on Cmd+Z
+  PP.dismissDeleteToast = dismissDeleteToast;
 
   PP.loadActiveSlide = function () {
     var slide = S.slides[S.activeSlideIndex];
     if (!slide) return;
+
+    var wrapper = Utils.$('#canvas-wrapper');
+    if (wrapper) wrapper.classList.add('canvas-transitioning');
+
     PP.loadSlideSettings(slide);
     Editor.loadSlide(slide, PP.getSlideImage(slide));
     PP.applyCurrentTemplate();
+
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (wrapper) wrapper.classList.remove('canvas-transitioning');
+      });
+    });
   };
 
   // ── Slide panel wiring ────────────────────────────────────────────────

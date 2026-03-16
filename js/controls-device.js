@@ -38,6 +38,14 @@
       deviceSelect.value = val;
     });
 
+    // ── Orientation subscription ──────────────────────────────────
+    S._subscribe('orientation', function (val) {
+      Utils.$$('.orientation-btn').forEach(function (btn) {
+        btn.classList.toggle('active', btn.dataset.orientation === val);
+        btn.setAttribute('aria-pressed', btn.dataset.orientation === val ? 'true' : 'false');
+      });
+    });
+
     // ── Event listeners ─────────────────────────────────────────────
 
     // Form factor toggle
@@ -57,6 +65,27 @@
       PP.switchToDevice(deviceSelect.value);
     });
 
+    // Orientation toggle
+    Utils.$$('.orientation-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var orient = btn.dataset.orientation;
+        if (orient === S.orientation) return;
+        S.orientation = orient;
+        // Apply orientation to all slides (global setting like device)
+        S.slides.forEach(function (slide) {
+          slide.orientation = orient;
+        });
+        PP.resetLayoutOverrides();
+        Editor.switchDevice(S.activeDevice, S.orientation);
+        PP.renderSlideList();
+        if (S.slides.length) PP.loadActiveSlide();
+        PP.renderCanvasStrip();
+        PP.updateSlideAspectRatio();
+        PP.updateExportCounts();
+        PP.markDirty();
+      });
+    });
+
     // Initial population (trigger subscription manually for current value)
     var currentFactor = Devices.FORM_FACTOR[S.activeDevice] || 'phone';
     Utils.$$('.form-factor-btn').forEach(function (btn) {
@@ -65,6 +94,10 @@
     });
     populateDeviceSelect(currentFactor);
     deviceSelect.value = S.activeDevice;
+    Utils.$$('.orientation-btn').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.orientation === (S.orientation || 'portrait'));
+      btn.setAttribute('aria-pressed', btn.dataset.orientation === (S.orientation || 'portrait') ? 'true' : 'false');
+    });
   };
 
   PP.switchToDevice = function (device) {
@@ -75,7 +108,7 @@
 
     S.activeDevice = device;
 
-    Editor.switchDevice(device);
+    Editor.switchDevice(device, S.orientation);
 
     // Same slides, just re-render with the new device frame
     PP.renderSlideList();
@@ -90,7 +123,7 @@
   };
 
   PP.updateSlideAspectRatio = function () {
-    var design = Devices.DESIGN[S.activeDevice];
+    var design = Devices.effectiveDesign(S.activeDevice, S.orientation);
     Utils.$$('.slide-item').forEach(function (el) {
       el.style.aspectRatio = design.w + ' / ' + design.h;
     });
