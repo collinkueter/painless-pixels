@@ -156,19 +156,14 @@
 
         <div class="sidebar-section">
           <div class="section-label">Device</div>
-          <div class="device-picker" role="group" aria-label="Device type">
-            <button class="device-btn active" data-device="iphone" aria-pressed="true">
-              <div class="device-thumb iphone-thumb"></div>
-              <span>iPhone</span>
-            </button>
-            <button class="device-btn" data-device="ipad" aria-pressed="false">
-              <div class="device-thumb ipad-thumb"></div>
-              <span>iPad</span>
-            </button>
-            <button class="device-btn" data-device="android" aria-pressed="false">
-              <div class="device-thumb android-thumb"></div>
-              <span>Android</span>
-            </button>
+          <div class="form-factor-toggle" role="group" aria-label="Form factor">
+            <button class="form-factor-btn active" data-factor="phone" aria-pressed="true">Phone</button>
+            <button class="form-factor-btn" data-factor="tablet" aria-pressed="false">Tablet</button>
+          </div>
+          <div class="field-group">
+            <select class="field-input" id="device-select">
+              <!-- Populated dynamically -->
+            </select>
           </div>
         </div>
 
@@ -332,7 +327,7 @@
       <div class="overlay-header">
         <div>
           <h2 class="overlay-title" id="overlay-title">Export All Sizes</h2>
-          <p class="overlay-sub">Ready to generate <span id="export-slide-count">0</span> screenshots × 8 sizes</p>
+          <p class="overlay-sub" id="export-sub">Ready to generate screenshots</p>
         </div>
         <button class="overlay-close" id="export-close" aria-label="Close export panel">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -341,36 +336,21 @@
         </button>
       </div>
 
-      <div class="export-specs-grid">
-        <div class="spec-column">
-          <div class="spec-column-title">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M4 1H10Q11 1 11 2V12Q11 13 10 13H4Q3 13 3 12V2Q3 1 4 1Z" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
-            </svg>
-            iOS App Store
-          </div>
-          <div class="spec-list">
-            <div class="spec-row"><span class="spec-name">iPhone 6.9"</span><span class="spec-dim">1260 × 2736</span></div>
-            <div class="spec-row"><span class="spec-name">iPhone 6.5"</span><span class="spec-dim">1284 × 2778</span></div>
-            <div class="spec-row"><span class="spec-name">iPad 13"</span><span class="spec-dim">2064 × 2752</span></div>
-            <div class="spec-row"><span class="spec-name">iPad 12.9"</span><span class="spec-dim">2048 × 2732</span></div>
-          </div>
-        </div>
-        <div class="spec-column">
-          <div class="spec-column-title">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M2 4H12Q13 4 13 5V10Q13 11 12 11H2Q1 11 1 10V5Q1 4 2 4Z" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
-              <circle cx="7" cy="2" r="0.8" fill="currentColor"/>
-            </svg>
-            Google Play
-          </div>
-          <div class="spec-list">
-            <div class="spec-row"><span class="spec-name">Phone Portrait</span><span class="spec-dim">1080 × 1920</span></div>
-            <div class="spec-row"><span class="spec-name">Phone Landscape</span><span class="spec-dim">1920 × 1080</span></div>
-            <div class="spec-row"><span class="spec-name">Tablet 7"</span><span class="spec-dim">1200 × 1920</span></div>
-            <div class="spec-row"><span class="spec-name">Tablet 10"</span><span class="spec-dim">1800 × 2560</span></div>
-          </div>
-        </div>
+      <div class="export-os-checks" id="export-os-checks">
+        <label class="export-os-check">
+          <input type="checkbox" id="export-ios" checked>
+          <span>iOS (iPhone + iPad)</span>
+          <span class="export-os-count" id="export-ios-count"></span>
+        </label>
+        <label class="export-os-check">
+          <input type="checkbox" id="export-android" checked>
+          <span>Android (Phone + Tablets)</span>
+          <span class="export-os-count" id="export-android-count"></span>
+        </label>
+      </div>
+
+      <div class="export-specs-grid" id="export-specs-grid">
+        <!-- Populated dynamically by app.js -->
       </div>
 
       <div class="export-progress-wrap hidden" id="export-progress-wrap">
@@ -417,6 +397,18 @@
   <script src="js/templates.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/export.js"></script>
+
+  <!-- State + reactive layer (before controls) -->
+  <script src="js/state.js"></script>
+
+  <!-- Control modules -->
+  <script src="js/controls-text.js"></script>
+  <script src="js/controls-bg.js"></script>
+  <script src="js/controls-device.js"></script>
+  <script src="js/controls-layout.js"></script>
+  <script src="js/slides.js"></script>
+
+  <!-- App orchestrator (last — calls init functions from above) -->
   <script src="js/app.js"></script>
 
 </body>

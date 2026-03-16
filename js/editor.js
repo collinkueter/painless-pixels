@@ -19,7 +19,7 @@ const Editor = {
   headlineText: null,
   sublineText:  null,
 
-  currentDevice:   'iphone',
+  currentDevice:   'iphone',  // any of Devices.ALL_DEVICES keys
   currentTemplate: null,
   currentSlide:    null,
   _layoutOverrides: null,
@@ -230,7 +230,7 @@ const Editor = {
     this.bgRect.set({ width: p.w, height: p.h });
     this.splitRect.set({ width: p.w, height: p.h / 2, top: p.h / 2 });
 
-    // Reload content
+    // Reload content — caller should follow up with loadSlide(slide, imageUrl) for proper image
     if (this.currentSlide) this.loadSlide(this.currentSlide);
     else this._loadFrame();
 
@@ -240,18 +240,19 @@ const Editor = {
 
   // ── Slide Loading ─────────────────────────────────────────────────────────
 
-  loadSlide(slide) {
+  loadSlide(slide, imageUrl) {
     this.currentSlide = slide;
     const c = this.canvas;
     const device = this.currentDevice;
     const screen = Devices.screenInPreview(device);
     const seq = ++this._loadSeq;
+    const src = imageUrl || slide.imageData;
 
     // Remove old phone image
     if (this.phoneImage) { this.phoneImage.dispose(); c.remove(this.phoneImage); this.phoneImage = null; }
 
     fabric.Image.fromURL(
-      slide.imageData,
+      src,
       (img) => {
         if (this._loadSeq !== seq) return;
         if (!img) return;

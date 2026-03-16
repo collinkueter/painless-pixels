@@ -34,10 +34,12 @@
 .canvas-scroll::-webkit-scrollbar-corner { background: transparent; }
 
 .canvas-container {
-  padding: 40px;
+  padding: 40px 48px;
   display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
+  gap: 24px;
+  min-width: max-content;
 }
 
 .canvas-wrapper {
@@ -181,6 +183,44 @@
   animation: progressShimmer 1.5s linear infinite;
 }
 
+/* ── Canvas strip (all slides side-by-side) ─────────── */
+.canvas-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.canvas-slot:not(.canvas-slot-active) {
+  cursor: pointer;
+}
+
+.canvas-slot-label {
+  font-size: 11px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.canvas-slide-preview {
+  display: block;
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 0.2s, opacity 0.2s;
+  background: var(--canvas-bg);
+}
+
+.canvas-slot:not(.canvas-slot-active):hover .canvas-slide-preview {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
+}
+
 /* ── Reduced Motion ─────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .upload-logo,
@@ -226,7 +266,6 @@
 
   .canvas-wrapper,
   .field-input,
-  .device-btn,
   .template-swatch,
   .btn-accent,
   .btn-ghost {

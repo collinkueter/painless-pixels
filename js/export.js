@@ -17,22 +17,31 @@ const Exporter = {
    * Main entry point.
    *
    * @param {Object}   opts
-   * @param {Slide[]}  opts.slides      — array of { id, imageData }
-   * @param {string}   opts.device      — 'iphone' | 'ipad' | 'android'
-   * @param {string}   opts.templateId  — template id string
-   * @param {Object}   opts.bgState     — { bgType, bgFrom, bgTo, bgAngle, bgSolid }
-   * @param {Object}   opts.textState   — { headline, subheadline, hlFontSize, hlColor,
-   *                                        hlWeight, hlAlign, slFontSize, slColor,
-   *                                        slWeight, slAlign }
-   * @param {Function} opts.onProgress  — (current, total, label) => void
-   * @returns {Promise<void>}           — triggers ZIP download when done
+   * @param {Object[]} opts.slides         — flat array of slide objects (each with imageData + optional tabletImageData)
+   * @param {string[]} opts.selectedOSes   — ['ios', 'android'] etc
+   * @param {Function} opts.onProgress     — (current, total, label) => void
+   * @returns {Promise<void>}              — triggers ZIP download when done
    */
   async run(opts) {
-    const { slides, device, templateId, bgState, textState, layoutState, onProgress } = opts;
-    const tmpl    = Templates.getById(templateId);
-    const specs   = Devices.EXPORT_SPECS;
-    const total   = slides.length * specs.length;
-    let   current = 0;
+    const { slides, selectedOSes, onProgress } = opts;
+
+    if (!slides || !slides.length) return;
+
+    // Collect all (device, specs) pairs for selected OSes
+    const jobs = [];
+    for (const os of selectedOSes) {
+      const devices = Devices.OS_DEVICES[os] || [];
+      for (const device of devices) {
+        const specs = Devices.EXPORT_SPECS[device] || [];
+        if (!specs.length) continue;
+        jobs.push({ device, specs });
+      }
+    }
+
+    // Count total renders
+    let total = 0;
+    for (const job of jobs) total += slides.length * job.specs.length;
+    let current = 0;
 
     // Preload Syne so canvas text rendering gets the right font
     try {
@@ -42,23 +51,47 @@ const Exporter = {
 
     const zip = new JSZip();
 
-    // Pre-load the device frame SVG once
-    const frameImg = await this._loadImage(Devices.FRAME_PATH[device]).catch(() => null);
+    for (const job of jobs) {
+      const { device, specs } = job;
+      const isTablet = Devices.isTablet(device);
 
-    for (const [si, slide] of slides.entries()) {
-      const screenshotImg = await this._loadImage(slide.imageData).catch(() => null);
+      // Frame image is shared across slides (device-level)
+      const frameImg = await this._loadFrame(Devices.FRAME_PATH[device]).catch(() => null);
 
-      for (const spec of specs) {
-        current++;
-        if (onProgress) onProgress(current, total, `${spec.label} — slide ${si + 1}`);
+      for (const [si, slide] of slides.entries()) {
+        // Pick the right image for this device form factor
+        const imgSrc = (isTablet && slide.tabletImageData) ? slide.tabletImageData : slide.imageData;
+        const screenshotImg = await this._loadImage(imgSrc).catch(() => null);
 
-        const blob = await this._renderSlide({
-          spec, device, tmpl, bgState, textState, layoutState, screenshotImg, frameImg,
-        });
+        // Each slide carries its own design settings
+        const tmpl = Templates.getById(slide.templateId);
+        const bgState = {
+          bgType: slide.bgType, bgFrom: slide.bgFrom, bgTo: slide.bgTo,
+          bgAngle: slide.bgAngle, bgSolid: slide.bgSolid,
+          bgSplitTop: slide.bgSplitTop, bgSplitBottom: slide.bgSplitBottom,
+        };
+        const textState = {
+          headline: slide.headline, subheadline: slide.subheadline,
+          hlFontSize: slide.headlineSize, hlColor: slide.textColor,
+          slFontSize: slide.subheadlineSize, slColor: slide.subheadlineColor,
+        };
+        const layoutState = {
+          phoneXFrac: slide.phoneXFrac, phoneYFrac: slide.phoneYFrac, phoneAngle: slide.phoneAngle,
+          headlineXFrac: slide.headlineXFrac, headlineYFrac: slide.headlineYFrac, headlineAngle: slide.headlineAngle,
+          subheadlineXFrac: slide.subheadlineXFrac, subheadlineYFrac: slide.subheadlineYFrac, subheadlineAngle: slide.subheadlineAngle,
+        };
 
-        if (blob) {
-          const idx = si + 1;
-          zip.file(`${spec.path}_${idx}.png`, blob);
+        for (const spec of specs) {
+          current++;
+          if (onProgress) onProgress(current, total, spec.label + ' — slide ' + (si + 1));
+
+          const blob = await this._renderSlide({
+            spec, device, tmpl, bgState, textState, layoutState, screenshotImg, frameImg,
+          });
+
+          if (blob) {
+            zip.file(spec.path + '_' + (si + 1) + '.png', blob);
+          }
         }
       }
     }
@@ -128,12 +161,6 @@ const Exporter = {
       const frameAR    = frameNatH / frameNatW;
       const frameTargH = Math.round(frameTargW * frameAR);
 
-      // Rasterize SVG at the correct output resolution to avoid blurry upscaling.
-      const tmpC = document.createElement('canvas');
-      tmpC.width  = frameTargW;
-      tmpC.height = frameTargH;
-      tmpC.getContext('2d').drawImage(frameImg, 0, 0, frameTargW, frameTargH);
-
       ctx.save();
       if (phoneAngle) {
         ctx.translate(phoneCX, phoneCY);
@@ -141,15 +168,13 @@ const Exporter = {
         ctx.translate(-phoneCX, -phoneCY);
       }
       ctx.drawImage(
-        tmpC,
+        frameImg,
         phoneCX - frameTargW / 2,
         phoneCY - frameTargH / 2,
         frameTargW,
         frameTargH
       );
       ctx.restore();
-
-      tmpC.width = 0; // release GPU backing store
     }
 
     // ── 4 & 5. Text ─────────────────────────────────────────────────────────
@@ -325,14 +350,63 @@ const Exporter = {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
+  /**
+   * Load an image, returning an HTMLImageElement ready for canvas drawing.
+   *
+   * Local asset paths (e.g. device frames) are loaded via a hidden <canvas>
+   * round-trip so they never taint the export canvas, regardless of CORS
+   * headers or file:// protocol.
+   */
+  _frameCache: {},
+
   _loadImage(src) {
+    if (!src) return Promise.reject(new Error('no src'));
+
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      // crossOrigin is needed for data URIs and remote URLs to keep canvas clean
+      if (src.startsWith('data:') || src.startsWith('http') || src.startsWith('blob:')) {
+        img.crossOrigin = 'anonymous';
+      }
       img.onload  = () => resolve(img);
       img.onerror = reject;
       img.src = src;
     });
+  },
+
+  /**
+   * Load a device frame image in a way that never taints the canvas.
+   * Draws the frame onto a same-origin canvas first, producing a clean source.
+   */
+  async _loadFrame(path) {
+    if (this._frameCache[path]) return this._frameCache[path];
+
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload  = () => resolve(el);
+      el.onerror = reject;
+      el.src = path;
+    });
+
+    // Draw onto a canvas to produce a clean same-origin bitmap
+    const c = document.createElement('canvas');
+    c.width  = img.naturalWidth  || img.width;
+    c.height = img.naturalHeight || img.height;
+    c.getContext('2d').drawImage(img, 0, 0);
+
+    // Convert back to an Image from a data URL (always same-origin)
+    const dataUrl = c.toDataURL('image/png');
+    c.width = 0;
+
+    const clean = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload  = () => resolve(el);
+      el.onerror = reject;
+      el.src = dataUrl;
+    });
+
+    this._frameCache[path] = clean;
+    return clean;
   },
 
   /**

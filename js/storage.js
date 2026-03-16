@@ -10,7 +10,7 @@ const Storage = (function () {
   var DB_NAME      = 'painless-pixels';
   var STORE_NAME   = 'state';
   var SESSION_KEY  = 'session';
-  var SCHEMA_VERSION = 2;
+  var SCHEMA_VERSION = 4;
 
   var ALLOWED_IMAGE_TYPES = ['data:image/png', 'data:image/jpeg', 'data:image/webp', 'data:image/gif'];
   var MAX_SLIDE_DATA_LENGTH = 20 * 1024 * 1024; // 20MB per slide
@@ -83,23 +83,53 @@ const Storage = (function () {
     });
   }
 
+  // ── Slide serialization helper ──────────────────────────────────────
+
+  function _serializeSlide(s) {
+    return {
+      id:               s.id,
+      imageData:        s.imageData,
+      tabletImageData:  s.tabletImageData || null,
+      title:            s.title || 'Untitled',
+      templateId:       s.templateId,
+      bgType:           s.bgType,
+      bgFrom:           s.bgFrom,
+      bgTo:             s.bgTo,
+      bgAngle:          s.bgAngle,
+      bgSolid:          s.bgSolid,
+      bgSplitTop:       s.bgSplitTop,
+      bgSplitBottom:    s.bgSplitBottom,
+      headline:         s.headline,
+      subheadline:      s.subheadline,
+      headlineSize:     s.headlineSize,
+      subheadlineSize:  s.subheadlineSize,
+      textColor:        s.textColor,
+      subheadlineColor: s.subheadlineColor,
+      phoneXFrac:       s.phoneXFrac,
+      phoneYFrac:       s.phoneYFrac,
+      phoneAngle:       s.phoneAngle,
+      headlineXFrac:    s.headlineXFrac,
+      headlineYFrac:    s.headlineYFrac,
+      headlineAngle:    s.headlineAngle,
+      subheadlineXFrac: s.subheadlineXFrac,
+      subheadlineYFrac: s.subheadlineYFrac,
+      subheadlineAngle: s.subheadlineAngle,
+    };
+  }
+
   // ── Serialization ─────────────────────────────────────────────────────
 
   function serialize(state) {
+    var slides = (state.slides || []).filter(function (s) {
+      return s && _isValidSlide(s);
+    }).map(_serializeSlide);
+
     return {
       _schemaVersion: SCHEMA_VERSION,
       _savedAt: new Date().toISOString(),
-      slides: (state.slides || []).filter(function (s) {
-        return s && _isValidSlide(s);
-      }).map(function (s) {
-        return {
-          id:        s.id,
-          imageData: s.imageData,
-          title:     s.title || 'Untitled',
-        };
-      }),
+      slides:           slides,
       activeSlideIndex: state.activeSlideIndex,
-      device:           state.device,
+      activeDevice:     state.activeDevice,
       templateId:       state.templateId,
       bgType:           state.bgType,
       bgFrom:           state.bgFrom,
@@ -135,51 +165,137 @@ const Storage = (function () {
     return false;
   }
 
+  /**
+   * Migrate V2 data (flat slides array + device) to V4 (flat slides + activeDevice + tabletImageData).
+   */
+  function _migrateV2toV4(data) {
+    var slides = Array.isArray(data.slides) ? data.slides : [];
+    slides.forEach(function (s) { s.tabletImageData = null; });
+    data.slides = slides;
+    data.activeDevice = data.device || 'iphone';
+    if (data.activeDevice === 'android') data.activeDevice = 'android-phone';
+    data._schemaVersion = 4;
+    delete data.device;
+    return data;
+  }
+
+  /**
+   * Migrate V3 data (deviceSlides keyed by device) to V4 (flat slides + tabletImageData).
+   */
+  function _migrateV3toV4(data) {
+    var deviceSlides = data.deviceSlides || {};
+    // Find first non-empty phone device slides as primary
+    var phoneDevices = Devices.FORM_DEVICES.phone;
+    var tabletDevices = Devices.FORM_DEVICES.tablet;
+    var primarySlides = [];
+    var primaryDevice = 'iphone';
+
+    for (var i = 0; i < phoneDevices.length; i++) {
+      var dev = phoneDevices[i];
+      if (deviceSlides[dev] && deviceSlides[dev].length) {
+        primarySlides = deviceSlides[dev].slice();
+        primaryDevice = dev;
+        break;
+      }
+    }
+
+    // If no phone slides found, try tablet slides
+    if (!primarySlides.length) {
+      for (var j = 0; j < tabletDevices.length; j++) {
+        var tDev = tabletDevices[j];
+        if (deviceSlides[tDev] && deviceSlides[tDev].length) {
+          primarySlides = deviceSlides[tDev].slice();
+          primaryDevice = tDev;
+          break;
+        }
+      }
+    }
+
+    // For each primary slide, pull tabletImageData from matching tablet device slide by index
+    var tabletSlides = null;
+    for (var k = 0; k < tabletDevices.length; k++) {
+      if (deviceSlides[tabletDevices[k]] && deviceSlides[tabletDevices[k]].length) {
+        tabletSlides = deviceSlides[tabletDevices[k]];
+        break;
+      }
+    }
+
+    primarySlides.forEach(function (s, idx) {
+      if (tabletSlides && tabletSlides[idx] && tabletSlides[idx].imageData) {
+        s.tabletImageData = tabletSlides[idx].imageData;
+      } else {
+        s.tabletImageData = null;
+      }
+    });
+
+    data.slides = primarySlides;
+    data.activeDevice = data.activeDevice || primaryDevice;
+    data._schemaVersion = 4;
+    delete data.deviceSlides;
+    return data;
+  }
+
+  function _deserializeSlide(s, data, defaults) {
+    return {
+      id:               s.id || Utils.uid(),
+      file:             null,
+      imageData:        s.imageData,
+      tabletImageData:  s.tabletImageData || null,
+      title:            s.title || 'Untitled',
+      templateId:       s.templateId || data.templateId || defaults.templateId,
+      bgType:           s.bgType || data.bgType || defaults.bgType,
+      bgFrom:           s.bgFrom || data.bgFrom || defaults.bgFrom,
+      bgTo:             s.bgTo || data.bgTo || defaults.bgTo,
+      bgAngle:          typeof s.bgAngle === 'number' ? s.bgAngle : (typeof data.bgAngle === 'number' ? data.bgAngle : defaults.bgAngle),
+      bgSolid:          s.bgSolid || data.bgSolid || defaults.bgSolid,
+      bgSplitTop:       s.bgSplitTop || data.bgSplitTop || defaults.bgSplitTop,
+      bgSplitBottom:    s.bgSplitBottom || data.bgSplitBottom || defaults.bgSplitBottom,
+      headline:         typeof s.headline === 'string' ? s.headline : (typeof data.headline === 'string' ? data.headline : defaults.headline),
+      subheadline:      typeof s.subheadline === 'string' ? s.subheadline : (typeof data.subheadline === 'string' ? data.subheadline : defaults.subheadline),
+      headlineSize:     typeof s.headlineSize === 'number' ? s.headlineSize : (typeof data.headlineSize === 'number' ? data.headlineSize : defaults.headlineSize),
+      subheadlineSize:  typeof s.subheadlineSize === 'number' ? s.subheadlineSize : (typeof data.subheadlineSize === 'number' ? data.subheadlineSize : defaults.subheadlineSize),
+      textColor:        s.textColor || data.textColor || defaults.textColor,
+      subheadlineColor: s.subheadlineColor || data.subheadlineColor || defaults.subheadlineColor,
+      phoneXFrac:       typeof s.phoneXFrac === 'number' ? s.phoneXFrac : null,
+      phoneYFrac:       typeof s.phoneYFrac === 'number' ? s.phoneYFrac : null,
+      phoneAngle:       typeof s.phoneAngle === 'number' ? s.phoneAngle : 0,
+      headlineXFrac:    typeof s.headlineXFrac === 'number' ? s.headlineXFrac : null,
+      headlineYFrac:    typeof s.headlineYFrac === 'number' ? s.headlineYFrac : null,
+      headlineAngle:    typeof s.headlineAngle === 'number' ? s.headlineAngle : 0,
+      subheadlineXFrac: typeof s.subheadlineXFrac === 'number' ? s.subheadlineXFrac : null,
+      subheadlineYFrac: typeof s.subheadlineYFrac === 'number' ? s.subheadlineYFrac : null,
+      subheadlineAngle: typeof s.subheadlineAngle === 'number' ? s.subheadlineAngle : 0,
+    };
+  }
+
   function deserialize(data, defaults) {
     if (!data || typeof data !== 'object') return null;
 
     // Reject newer schema versions
     if (data._schemaVersion && data._schemaVersion > SCHEMA_VERSION) return null;
 
-    // Validate slides
-    var slides = Array.isArray(data.slides) ? data.slides.filter(_isValidSlide) : [];
+    // V2 → V4 migration (flat slides + device)
+    if (!data._schemaVersion || data._schemaVersion < 3) {
+      data = _migrateV2toV4(data);
+    }
+    // V3 → V4 migration (deviceSlides)
+    else if (data._schemaVersion === 3) {
+      data = _migrateV3toV4(data);
+    }
+
+    // Build slides from saved data
+    var rawSlides = Array.isArray(data.slides) ? data.slides.filter(_isValidSlide) : [];
+    var slides = rawSlides.map(function (s) {
+      return _deserializeSlide(s, data, defaults);
+    });
+
     if (!slides.length) return null;
 
     return {
       _savedAt:         data._savedAt || null,
-      slides:           slides.map(function (s) {
-        return {
-          id:        s.id || Utils.uid(),
-          file:      null,
-          imageData: s.imageData,
-          title:     s.title || 'Untitled',
-        };
-      }),
+      slides:           slides,
       activeSlideIndex: typeof data.activeSlideIndex === 'number' ? data.activeSlideIndex : 0,
-      device:           data.device || defaults.device,
-      templateId:       data.templateId || defaults.templateId,
-      bgType:           data.bgType || defaults.bgType,
-      bgFrom:           data.bgFrom || defaults.bgFrom,
-      bgTo:             data.bgTo || defaults.bgTo,
-      bgAngle:          typeof data.bgAngle === 'number' ? data.bgAngle : defaults.bgAngle,
-      bgSolid:          data.bgSolid || defaults.bgSolid,
-      bgSplitTop:       data.bgSplitTop || defaults.bgSplitTop,
-      bgSplitBottom:    data.bgSplitBottom || defaults.bgSplitBottom,
-      headline:         typeof data.headline === 'string' ? data.headline : defaults.headline,
-      subheadline:      typeof data.subheadline === 'string' ? data.subheadline : defaults.subheadline,
-      headlineSize:     typeof data.headlineSize === 'number' ? data.headlineSize : defaults.headlineSize,
-      subheadlineSize:  typeof data.subheadlineSize === 'number' ? data.subheadlineSize : defaults.subheadlineSize,
-      textColor:        data.textColor || defaults.textColor,
-      subheadlineColor: data.subheadlineColor || defaults.subheadlineColor,
-      phoneXFrac:       typeof data.phoneXFrac === 'number' ? data.phoneXFrac : null,
-      phoneYFrac:       typeof data.phoneYFrac === 'number' ? data.phoneYFrac : null,
-      phoneAngle:       typeof data.phoneAngle === 'number' ? data.phoneAngle : 0,
-      headlineXFrac:    typeof data.headlineXFrac === 'number' ? data.headlineXFrac : null,
-      headlineYFrac:    typeof data.headlineYFrac === 'number' ? data.headlineYFrac : null,
-      headlineAngle:    typeof data.headlineAngle === 'number' ? data.headlineAngle : 0,
-      subheadlineXFrac: typeof data.subheadlineXFrac === 'number' ? data.subheadlineXFrac : null,
-      subheadlineYFrac: typeof data.subheadlineYFrac === 'number' ? data.subheadlineYFrac : null,
-      subheadlineAngle: typeof data.subheadlineAngle === 'number' ? data.subheadlineAngle : 0,
+      activeDevice:     data.activeDevice || defaults.activeDevice || 'iphone',
     };
   }
 
@@ -207,11 +323,15 @@ const Storage = (function () {
     });
   }
 
+  function _hasAnySlides(state) {
+    return state.slides && state.slides.length > 0;
+  }
+
   function save(state) {
     if (!_idbAvailable) return Promise.resolve();
     var version = ++_saveVersion;
     var data = serialize(state);
-    if (!data.slides.length) return Promise.resolve(); // don't save empty/invalid state
+    if (!_hasAnySlides(state)) return Promise.resolve(); // don't save empty/invalid state
     return _put(SESSION_KEY, data).then(function () {
       if (version === _saveVersion && _onSave) {
         _onSave();
@@ -268,7 +388,7 @@ const Storage = (function () {
           var stateData = null;
           if (parsed.app === 'painless-pixels' && parsed.state) {
             stateData = parsed.state;
-          } else if (parsed.slides) {
+          } else if (parsed.slides || parsed.deviceSlides) {
             stateData = parsed;
           }
           if (!stateData) {
