@@ -24,6 +24,8 @@ const Editor = {
   currentSlide:    null,
   _layoutOverrides: null,
   _orientation: 'portrait',
+  _baseW: 323,  // logical (unzoomed) canvas width
+  _baseH: 660,  // logical (unzoomed) canvas height
 
   _loadSeq:        0,
   _onTextChange:   null,
@@ -47,6 +49,17 @@ const Editor = {
 
     // Show the device frame immediately even without a screenshot
     this._loadFrame();
+
+    // Re-measure text after web fonts load (prevents clipping with Syne)
+    var self = this;
+    document.fonts.ready.then(function () {
+      if (self.headlineText) self.headlineText.initDimensions();
+      if (self.sublineText) self.sublineText.initDimensions();
+      self.canvas.renderAll();
+    });
+
+    // Scale canvas to fill available space; also on resize
+    window.addEventListener('resize', function () { self.fitCanvasToArea(); });
 
     return this;
   },
@@ -144,10 +157,11 @@ const Editor = {
   _showGuides(obj) {
     this._clearGuides();
     const c = this.canvas;
-    const w = c.width, h = c.height;
+    const w = this._baseW, h = this._baseH;
+    var zoom = c.getZoom() || 1;
     const bound = obj.getBoundingRect();
-    const objCX = bound.left + bound.width / 2;
-    const objCY = bound.top + bound.height / 2;
+    const objCX = (bound.left + bound.width / 2) / zoom;
+    const objCY = (bound.top + bound.height / 2) / zoom;
 
     const guides = [
       { pos: w / 2, axis: 'x' },   // center vertical
@@ -231,8 +245,8 @@ const Editor = {
       this._clearGuides();
       frameDragStart = null;
       const obj = e.target;
-      const w = this.canvas.width;
-      const h = this.canvas.height;
+      const w = this._baseW;
+      const h = this._baseH;
 
       if (obj === this.frameImage) {
         if (this._onLayoutChange) {
@@ -288,7 +302,11 @@ const Editor = {
     this._orientation = orientation || 'portrait';
     const p = Devices.effectivePreview(device, this._orientation);
 
-    // Resize canvas
+    this._baseW = p.w;
+    this._baseH = p.h;
+
+    // Reset zoom before resizing
+    this.canvas.setZoom(1);
     this.canvas.setWidth(p.w);
     this.canvas.setHeight(p.h);
 
@@ -302,7 +320,31 @@ const Editor = {
 
     // Layout is applied inside the async _loadFrame / loadSlide callbacks
     this.canvas.renderAll();
+    this.fitCanvasToArea();
   },
+
+  /** Scale the canvas to fill the available canvas-area space using Fabric zoom */
+  fitCanvasToArea() {
+    var area = document.getElementById('canvas-area');
+    if (!area || !this.canvas) return;
+
+    var p = Devices.effectivePreview(this.currentDevice, this._orientation);
+    if (!p.w || !p.h) return;
+
+    var areaRect = area.getBoundingClientRect();
+    var availW = areaRect.width - 64;
+    var availH = areaRect.height - 80;
+    if (availW <= 0 || availH <= 0) return;
+
+    var scale = Math.min(availW / p.w, availH / p.h, 2.5);
+
+    this.canvas.setZoom(scale);
+    this.canvas.setWidth(p.w * scale);
+    this.canvas.setHeight(p.h * scale);
+    this.canvas.calcOffset();
+    this.canvas.renderAll();
+  },
+
 
   // ── Slide Loading ─────────────────────────────────────────────────────────
 
@@ -367,13 +409,14 @@ const Editor = {
         var frameAngle = rotated ? (Devices.nativeOrientation(device) === 'portrait' ? -90 : 90) : 0;
         var effectiveFrameW = rotated ? img.height : img.width;
         var effectiveFrameH = rotated ? img.width : img.height;
+        var lw = this._baseW, lh = this._baseH;
         img.set({
-          left:      c.width  / 2,
-          top:       c.height / 2,
+          left:      lw / 2,
+          top:       lh / 2,
           originX:   'center',
           originY:   'center',
-          scaleX:    c.width  / effectiveFrameW,
-          scaleY:    c.height / effectiveFrameH,
+          scaleX:    lw / effectiveFrameW,
+          scaleY:    lh / effectiveFrameH,
           angle:     frameAngle,
           selectable: true,
           evented:    true,
@@ -433,7 +476,7 @@ const Editor = {
 
   _applyBackground(tmpl) {
     const c = this.canvas;
-    const w = c.width, h = c.height;
+    const w = this._baseW, h = this._baseH;
     const bg = tmpl.bg;
 
     if (bg.type === 'split') {
@@ -454,8 +497,8 @@ const Editor = {
 
   _applyLayout(tmpl, overrides) {
     const c  = this.canvas;
-    const w  = c.width;
-    const h  = c.height;
+    const w  = this._baseW;
+    const h  = this._baseH;
     const ov = overrides || {};
 
     // Resolve effective phone position
@@ -586,7 +629,7 @@ const Editor = {
 
   updateBackground(state) {
     const c = this.canvas;
-    const w = c.width, h = c.height;
+    const w = this._baseW, h = this._baseH;
 
     if (state.bgType === 'split') {
       // used internally by templates
@@ -611,8 +654,16 @@ const Editor = {
   // ── Text Update ────────────────────────────────────────────────────────────
 
   updateText(state) {
-    if ('headline' in state)         this.headlineText.set('text', state.headline);
-    if ('subheadline' in state)      this.sublineText.set('text', state.subheadline);
+    if ('headline' in state) {
+      this.headlineText.set('text', state.headline);
+      this.headlineText.set('visible', !!state.headline);
+      this.headlineText.initDimensions();
+    }
+    if ('subheadline' in state) {
+      this.sublineText.set('text', state.subheadline);
+      this.sublineText.set('visible', !!state.subheadline);
+      this.sublineText.initDimensions();
+    }
     if ('headlineSize' in state)     this.headlineText.set('fontSize', parseInt(state.headlineSize, 10) || 38);
     if ('subheadlineSize' in state)  this.sublineText.set('fontSize', parseInt(state.subheadlineSize, 10) || 20);
     if ('textColor' in state)        this.headlineText.set('fill', state.textColor);
@@ -633,7 +684,6 @@ const Editor = {
   _autoFitTextObj(textObj, cfg) {
     const tmpl = this.currentTemplate;
     if (!tmpl) return;
-    const w = this.canvas.width;
     const maxW = this._textMaxWidth(tmpl, cfg);
 
     textObj.initDimensions();
@@ -642,6 +692,8 @@ const Editor = {
       textObj.set('fontSize', newSize);
       textObj.initDimensions();
     }
+    // Pad width to prevent clipping from web font metric rounding
+    textObj.set('width', textObj.width + textObj.fontSize * 0.15);
   },
 
   /** Create a rounded-rect clip path matching the device screen corners */
@@ -659,7 +711,7 @@ const Editor = {
   },
 
   _textMaxWidth(tmpl, cfg) {
-    const w = this.canvas.width;
+    const w = this._baseW;
     if (cfg.align === 'left') {
       const phoneLeftEdge = (tmpl.phoneXFrac - tmpl.phoneScale * 0.5) * w;
       return Math.max(0.25 * w, phoneLeftEdge - cfg.xFrac * w - 16);
@@ -726,8 +778,8 @@ const Editor = {
 
   /** Get current layout positions/rotations for export */
   getLayoutState() {
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+    const w = this._baseW;
+    const h = this._baseH;
     return {
       phoneXFrac:       this.frameImage ? this.frameImage.left / w : null,
       phoneYFrac:       this.frameImage ? this.frameImage.top / h : null,

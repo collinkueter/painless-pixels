@@ -204,16 +204,12 @@ var PP = {};
     });
   };
 
-  /** Save current slide then schedule auto-save + strip render */
+  /** Save current slide then schedule auto-save */
   PP.markDirty = function () {
     if (PP.pushUndo && !PP._applyingSnapshot) PP.pushUndo();
     PP.syncActiveSlide();
     Storage.scheduleSave(PP.State);
-    if (PP.debouncedStripRender) PP.debouncedStripRender();
   };
-
-  // Placeholder — set by slides.js once it loads
-  PP.debouncedStripRender = null;
 
   // Placeholder — set by app.js once it loads
   PP.applyCurrentTemplate = null;

@@ -88,7 +88,7 @@
 
     PP.applyCurrentTemplate();
     PP.renderSlideList();
-    PP.renderCanvasStrip();
+    PP.updateCanvasNav();  // explicit call since undo may not change activeSlideIndex
     PP.syncActiveSlide();
     Storage.scheduleSave(S);
 

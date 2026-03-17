@@ -1,138 +1,47 @@
 /**
- * Painless Pixels — Slides Panel & Canvas Strip
+ * Painless Pixels — Slides Panel & Canvas Navigation
  *
  * Manages slide list rendering, reordering, deletion,
- * canvas strip with live previews, and active slide loading.
+ * canvas navigation (prev/next), and active slide loading.
  */
 (function () {
   'use strict';
 
   var S = PP.State;
 
-  // Object URLs for rendered non-active slide previews — revoked on rebuild
-  var _previewURLs = {};
+  // No-ops so any stale call sites don't crash
+  PP.renderCanvasStrip = function () {};
+  PP.debouncedStripRender = function () {};
 
-  // ── Canvas strip (all slides side-by-side) ───────────────────────────
+  // ── Canvas navigation (prev/next + label) ──────────────────────────
 
-  PP.renderCanvasStrip = function () {
-    var container = Utils.$('#canvas-container');
-    var wrapper   = Utils.$('#canvas-wrapper');
-    var slides    = S.slides;
-    var preview   = Devices.effectivePreview(S.activeDevice, S.orientation);
+  PP.updateCanvasNav = function () {
+    var label = Utils.$('#canvas-nav-label');
+    var prevBtn = Utils.$('#prev-slide-btn');
+    var nextBtn = Utils.$('#next-slide-btn');
+    if (!label) return;
 
-    // Detach canvas-wrapper before clearing innerHTML so Fabric.js survives
-    wrapper.remove();
+    var total = S.slides.length;
+    var current = S.activeSlideIndex + 1;
+    label.textContent = current + ' / ' + total;
+    label.setAttribute('aria-label', 'Slide ' + current + ' of ' + total);
 
-    // Revoke stale preview object URLs
-    Object.values(_previewURLs).forEach(function (u) { URL.revokeObjectURL(u); });
-    _previewURLs = {};
-
-    container.innerHTML = '';
-
-    slides.forEach(function (slide, i) {
-      var isActive = (i === S.activeSlideIndex);
-
-      var slot = document.createElement('div');
-      slot.className = 'canvas-slot' + (isActive ? ' canvas-slot-active' : '');
-      slot.dataset.index = i;
-
-      if (isActive) {
-        slot.appendChild(wrapper);
-      } else {
-        var img = document.createElement('img');
-        img.className = 'canvas-slide-preview';
-        img.width  = preview.w;
-        img.height = preview.h;
-        img.alt    = 'Slide ' + (i + 1);
-        img.dataset.slideIndex = i;
-        // Show raw screenshot as placeholder until the styled render is ready
-        img.src = PP.getSlideImage(slide);
-        slot.appendChild(img);
-
-        slot.addEventListener('click', (function (idx) {
-          return function () {
-            S.activeSlideIndex = idx;
-            Utils.$$('.slide-item').forEach(function (el, j) {
-              el.classList.toggle('active', j === idx);
-              el.setAttribute('aria-selected', j === idx ? 'true' : 'false');
-              el.setAttribute('tabindex', j === idx ? '0' : '-1');
-            });
-            PP.loadActiveSlide();
-            PP.renderCanvasStrip();
-            PP.markDirty();
-          };
-        })(i));
-      }
-
-      var label = document.createElement('div');
-      label.className = 'canvas-slot-label';
-      label.textContent = i + 1;
-      slot.appendChild(label);
-
-      container.appendChild(slot);
-    });
-
-    PP.debouncedStripRender();
+    if (prevBtn) prevBtn.disabled = S.activeSlideIndex <= 0;
+    if (nextBtn) nextBtn.disabled = S.activeSlideIndex >= total - 1;
   };
 
-  PP.debouncedStripRender = Utils.debounce(renderNonActiveSlides, 600);
+  // ── Centralized slide switching ────────────────────────────────────
 
-  async function renderNonActiveSlides() {
-    var slides = S.slides;
-    if (!slides.length) return;
+  PP.switchToSlide = function (newIndex) {
+    if (newIndex < 0 || newIndex >= S.slides.length) return false;
+    if (newIndex === S.activeSlideIndex) return false;
 
-    var device  = S.activeDevice;
-    var preview = Devices.effectivePreview(device, S.orientation);
-    var spec    = { w: preview.w, h: preview.h };
-    var isTablet = Devices.isTablet(device);
-
-    try {
-      await document.fonts.load('bold 40px Syne');
-      await document.fonts.load('normal 40px Syne');
-    } catch (_) {}
-
-    var frameImg = await Exporter._loadFrame(Devices.FRAME_PATH[device]).catch(function () { return null; });
-
-    for (var i = 0; i < slides.length; i++) {
-      if (i === S.activeSlideIndex) continue;
-
-      var imgEl = Utils.$('[data-slide-index="' + i + '"]');
-      if (!imgEl || !imgEl.isConnected) continue;
-
-      var slide = slides[i];
-      var tmpl  = Templates.getById(slide.templateId);
-      var bgState = {
-        bgType: slide.bgType, bgFrom: slide.bgFrom, bgTo: slide.bgTo,
-        bgAngle: slide.bgAngle, bgSolid: slide.bgSolid,
-        bgSplitTop: slide.bgSplitTop, bgSplitBottom: slide.bgSplitBottom,
-      };
-      var textState = {
-        headline: slide.headline, subheadline: slide.subheadline,
-        hlFontSize: slide.headlineSize, hlColor: slide.textColor,
-        slFontSize: slide.subheadlineSize, slColor: slide.subheadlineColor,
-      };
-      var layoutState = {
-        phoneXFrac: slide.phoneXFrac, phoneYFrac: slide.phoneYFrac, phoneAngle: slide.phoneAngle,
-        headlineXFrac: slide.headlineXFrac, headlineYFrac: slide.headlineYFrac, headlineAngle: slide.headlineAngle,
-        subheadlineXFrac: slide.subheadlineXFrac, subheadlineYFrac: slide.subheadlineYFrac, subheadlineAngle: slide.subheadlineAngle,
-        orientation: S.orientation || slide.orientation || 'portrait',
-      };
-
-      var imgSrc = (isTablet && slide.tabletImageData) ? slide.tabletImageData : slide.imageData;
-      var screenshotImg = await Exporter._loadImage(imgSrc).catch(function () { return null; });
-      var blob = await Exporter._renderSlide({
-        spec: spec, device: device, tmpl: tmpl, bgState: bgState,
-        textState: textState, layoutState: layoutState, screenshotImg: screenshotImg, frameImg: frameImg,
-      });
-
-      if (!imgEl.isConnected || imgEl.dataset.slideIndex != i) continue;
-
-      if (_previewURLs[i]) URL.revokeObjectURL(_previewURLs[i]);
-      var url = URL.createObjectURL(blob);
-      _previewURLs[i] = url;
-      imgEl.src = url;
-    }
-  }
+    S.activeSlideIndex = newIndex;
+    PP.renderSlideList();
+    PP.loadActiveSlide();
+    PP.markDirty();
+    return true;
+  };
 
   // ── Slide list (right panel) ──────────────────────────────────────────
 
@@ -202,7 +111,6 @@
             slideRef.tabletImageData = null;
             PP.renderSlideList();
             if (slideIdx === S.activeSlideIndex) PP.loadActiveSlide();
-            PP.renderCanvasStrip();
             PP.markDirty();
           };
         })(slide, idx));
@@ -214,15 +122,7 @@
       item.addEventListener('click', (function (slideIdx) {
         return function (e) {
           if (e.target.closest('.slide-delete') || e.target.closest('.slide-reorder') || e.target.closest('.slide-tablet-badge')) return;
-          S.activeSlideIndex = slideIdx;
-          Utils.$$('.slide-item').forEach(function (el, i) {
-            el.classList.toggle('active', i === slideIdx);
-            el.setAttribute('aria-selected', i === slideIdx ? 'true' : 'false');
-            el.setAttribute('tabindex', i === slideIdx ? '0' : '-1');
-          });
-          PP.loadActiveSlide();
-          PP.renderCanvasStrip();
-          PP.markDirty();
+          PP.switchToSlide(slideIdx);
         };
       })(idx));
 
@@ -254,7 +154,6 @@
     if (S.activeSlideIndex === idx) S.activeSlideIndex = newIdx;
     else if (S.activeSlideIndex === newIdx) S.activeSlideIndex = idx;
     PP.renderSlideList();
-    PP.renderCanvasStrip();
     PP.updateExportCounts();
     PP.markDirty();
   }
@@ -275,7 +174,6 @@
     if (S.slides.length) {
       PP.loadActiveSlide();
     }
-    PP.renderCanvasStrip();
     PP.updateExportCounts();
     PP.markDirty();
 
@@ -308,7 +206,6 @@
         _deletedSlide = null;
         PP.renderSlideList();
         PP.loadActiveSlide();
-        PP.renderCanvasStrip();
         PP.updateExportCounts();
         PP.markDirty();
       }
@@ -373,7 +270,6 @@
       var maxNew = 10 - S.slides.length;
       S.slides.push.apply(S.slides, newSlides.slice(0, maxNew));
       PP.renderSlideList();
-      PP.renderCanvasStrip();
       PP.updateExportCounts();
       PP.markDirty();
     });
@@ -381,6 +277,27 @@
     // "Add screenshots" button in header
     Utils.$('#add-screenshots-btn').addEventListener('click', function () {
       Utils.$('#add-file-input').click();
+    });
+
+    // Prev/Next buttons below canvas
+    var prevBtn = Utils.$('#prev-slide-btn');
+    var nextBtn = Utils.$('#next-slide-btn');
+
+    if (prevBtn) {
+      prevBtn.addEventListener('click', function () {
+        PP.switchToSlide(S.activeSlideIndex - 1);
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener('click', function () {
+        PP.switchToSlide(S.activeSlideIndex + 1);
+      });
+    }
+
+    // Reactive: update nav whenever activeSlideIndex changes
+    S._subscribe('activeSlideIndex', function () {
+      PP.updateCanvasNav();
     });
   };
 

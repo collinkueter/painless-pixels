@@ -65,29 +65,16 @@ const Exporter = {
 
         // Each slide carries its own design settings
         const tmpl = Templates.getById(slide.templateId);
-        const bgState = {
-          bgType: slide.bgType, bgFrom: slide.bgFrom, bgTo: slide.bgTo,
-          bgAngle: slide.bgAngle, bgSolid: slide.bgSolid,
-          bgSplitTop: slide.bgSplitTop, bgSplitBottom: slide.bgSplitBottom,
-        };
-        const textState = {
-          headline: slide.headline, subheadline: slide.subheadline,
-          hlFontSize: slide.headlineSize, hlColor: slide.textColor,
-          slFontSize: slide.subheadlineSize, slColor: slide.subheadlineColor,
-        };
-        const layoutState = {
-          phoneXFrac: slide.phoneXFrac, phoneYFrac: slide.phoneYFrac, phoneAngle: slide.phoneAngle,
-          headlineXFrac: slide.headlineXFrac, headlineYFrac: slide.headlineYFrac, headlineAngle: slide.headlineAngle,
-          subheadlineXFrac: slide.subheadlineXFrac, subheadlineYFrac: slide.subheadlineYFrac, subheadlineAngle: slide.subheadlineAngle,
-          orientation: slide.orientation || 'portrait',
-        };
+        const params = this.buildRenderParams(slide);
 
         for (const spec of specs) {
           current++;
           if (onProgress) onProgress(current, total, spec.label + ' — slide ' + (si + 1));
 
           const blob = await this._renderSlide({
-            spec, device, tmpl, bgState, textState, layoutState, screenshotImg, frameImg,
+            spec, device, tmpl,
+            bgState: params.bgState, textState: params.textState, layoutState: params.layoutState,
+            screenshotImg, frameImg,
           });
 
           if (blob) {
@@ -118,86 +105,116 @@ const Exporter = {
     canvas.height = H;
     const ctx = canvas.getContext('2d');
 
-    // Resolve effective phone position (custom override or template default)
-    const phoneCX    = W * (ls.phoneXFrac != null ? ls.phoneXFrac : tmpl.phoneXFrac);
-    const phoneCY    = H * (ls.phoneYFrac != null ? ls.phoneYFrac : tmpl.phoneYFrac);
-    const phoneAngle = ls.phoneAngle || 0;
-    const orientation = ls.orientation || 'portrait';
-    const rotated = Devices.isRotated(device, orientation);
+    try {
+      // Resolve effective phone position (custom override or template default)
+      const phoneCX    = W * (ls.phoneXFrac != null ? ls.phoneXFrac : tmpl.phoneXFrac);
+      const phoneCY    = H * (ls.phoneYFrac != null ? ls.phoneYFrac : tmpl.phoneYFrac);
+      const phoneAngle = ls.phoneAngle || 0;
+      const orientation = ls.orientation || 'portrait';
+      const rotated = Devices.isRotated(device, orientation);
 
-    // ── 1. Background ───────────────────────────────────────────────────────
-    this._drawBackground(ctx, W, H, tmpl, bgState);
+      // ── 1. Background ───────────────────────────────────────────────────────
+      this._drawBackground(ctx, W, H, tmpl, bgState);
 
-    // Effective dimensions account for orientation (swapped if rotated)
-    const design = Devices.effectiveDesign(device, orientation);
-    const phonePixelScale = (W * tmpl.phoneScale) / design.w;
-    const screen = Devices.screenForPhone(device, phoneCX, phoneCY, phonePixelScale, orientation);
+      // Effective dimensions account for orientation (swapped if rotated)
+      const design = Devices.effectiveDesign(device, orientation);
+      const phonePixelScale = (W * tmpl.phoneScale) / design.w;
+      const screen = Devices.screenForPhone(device, phoneCX, phoneCY, phonePixelScale, orientation);
 
-    // ── 2. Screenshot ───────────────────────────────────────────────────────
-    if (screenshotImg) {
-      ctx.save();
-      if (phoneAngle) {
+      // ── 2. Screenshot ───────────────────────────────────────────────────────
+      if (screenshotImg) {
+        ctx.save();
+        if (phoneAngle) {
+          ctx.translate(phoneCX, phoneCY);
+          ctx.rotate(phoneAngle * Math.PI / 180);
+          ctx.translate(-phoneCX, -phoneCY);
+        }
+
+        // Clip to screen rectangle (in effective coordinate space)
+        ctx.beginPath();
+        this._roundedRect(ctx, screen.x, screen.y, screen.w, screen.h, screen.w * (Devices.SCREEN_CORNER[device] || 0.04));
+        ctx.clip();
+
+        // Cover-fit the screenshot into the screen
+        var fit = this._coverFit(
+          screenshotImg.naturalWidth  || screenshotImg.width,
+          screenshotImg.naturalHeight || screenshotImg.height,
+          screen.x, screen.y, screen.w, screen.h
+        );
+        ctx.drawImage(screenshotImg, fit.sx, fit.sy, fit.sw, fit.sh, fit.dx, fit.dy, fit.dw, fit.dh);
+        ctx.restore();
+      }
+
+      // ── 3. Device Frame ─────────────────────────────────────────────────────
+      if (frameImg) {
+        // The frame PNG is in native orientation — compute how to draw it
+        const frameNatW  = frameImg.naturalWidth  || frameImg.width;
+        const frameNatH  = frameImg.naturalHeight || frameImg.height;
+
+        // Effective phone dimensions in canvas pixels
+        var phoneW = design.w * phonePixelScale;
+        var phoneH = design.h * phonePixelScale;
+
+        ctx.save();
         ctx.translate(phoneCX, phoneCY);
-        ctx.rotate(phoneAngle * Math.PI / 180);
-        ctx.translate(-phoneCX, -phoneCY);
+        if (phoneAngle) ctx.rotate(phoneAngle * Math.PI / 180);
+
+        if (rotated) {
+          // Rotate the frame image to match the target orientation
+          var frameRotation = Devices.nativeOrientation(device) === 'portrait' ? -90 : 90;
+          ctx.rotate(frameRotation * Math.PI / 180);
+          // In rotated space, draw using native frame dimensions scaled to fill phone area
+          // After rotation, native W maps to visual H and vice versa
+          var drawW = phoneH;  // native frame width fills the visual height
+          var drawH = phoneW;  // native frame height fills the visual width
+          ctx.drawImage(frameImg, -drawW / 2, -drawH / 2, drawW, drawH);
+        } else {
+          ctx.drawImage(frameImg, -phoneW / 2, -phoneH / 2, phoneW, phoneH);
+        }
+        ctx.restore();
       }
 
-      // Clip to screen rectangle (in effective coordinate space)
-      ctx.beginPath();
-      this._roundedRect(ctx, screen.x, screen.y, screen.w, screen.h, screen.w * (Devices.SCREEN_CORNER[device] || 0.04));
-      ctx.clip();
-
-      // Cover-fit the screenshot into the screen
-      var fit = this._coverFit(
-        screenshotImg.naturalWidth  || screenshotImg.width,
-        screenshotImg.naturalHeight || screenshotImg.height,
-        screen.x, screen.y, screen.w, screen.h
-      );
-      ctx.drawImage(screenshotImg, fit.sx, fit.sy, fit.sw, fit.sh, fit.dx, fit.dy, fit.dw, fit.dh);
-      ctx.restore();
+      // ── 4 & 5. Text ─────────────────────────────────────────────────────────
+      this._drawText(ctx, W, H, tmpl, textState, device, ls);
+    } catch (_) {
+      // Draw at least a solid background so the preview isn't blank
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, W, H);
     }
 
-    // ── 3. Device Frame ─────────────────────────────────────────────────────
-    if (frameImg) {
-      // The frame PNG is in native orientation — compute how to draw it
-      const frameNatW  = frameImg.naturalWidth  || frameImg.width;
-      const frameNatH  = frameImg.naturalHeight || frameImg.height;
-
-      // Effective phone dimensions in canvas pixels
-      var phoneW = design.w * phonePixelScale;
-      var phoneH = design.h * phonePixelScale;
-
-      ctx.save();
-      ctx.translate(phoneCX, phoneCY);
-      if (phoneAngle) ctx.rotate(phoneAngle * Math.PI / 180);
-
-      if (rotated) {
-        // Rotate the frame image to match the target orientation
-        var frameRotation = Devices.nativeOrientation(device) === 'portrait' ? -90 : 90;
-        ctx.rotate(frameRotation * Math.PI / 180);
-        // In rotated space, draw using native frame dimensions scaled to fill phone area
-        // After rotation, native W maps to visual H and vice versa
-        var drawW = phoneH;  // native frame width fills the visual height
-        var drawH = phoneW;  // native frame height fills the visual width
-        var scaleX = drawW / frameNatW;
-        var scaleY = drawH / frameNatH;
-        ctx.drawImage(frameImg, -drawW / 2, -drawH / 2, drawW, drawH);
-      } else {
-        ctx.drawImage(frameImg, -phoneW / 2, -phoneH / 2, phoneW, phoneH);
-      }
-      ctx.restore();
+    // ── Return rendered result ──────────────────────────────────────────────
+    // asCanvas: return the canvas element directly (for DOM display, avoids
+    //           taint issues on file:// where toDataURL would throw).
+    // asDataURL: return a data URL string (for <img> src).
+    // Otherwise: return a Blob (for ZIP export).
+    if (spec.asCanvas) {
+      return canvas;
     }
 
-    // ── 4 & 5. Text ─────────────────────────────────────────────────────────
-    this._drawText(ctx, W, H, tmpl, textState, device, ls);
-
-    // ── Export to PNG Blob ───────────────────────────────────────────────────
-    return new Promise(resolve => {
-      canvas.toBlob(blob => {
-        canvas.width = 0;  // release GPU backing store early
+    if (spec.asDataURL) {
+      try {
+        var dataURL = canvas.toDataURL('image/png');
+        canvas.width = 0;
         canvas.height = 0;
-        resolve(blob);
-      }, 'image/png');
+        return dataURL;
+      } catch (_) {
+        // Canvas tainted (file:// frames) — return canvas element as fallback
+        return canvas;
+      }
+    }
+
+    return new Promise(resolve => {
+      try {
+        canvas.toBlob(function (blob) {
+          canvas.width = 0;
+          canvas.height = 0;
+          resolve(blob);
+        }, 'image/png');
+      } catch (_) {
+        canvas.width = 0;
+        canvas.height = 0;
+        resolve(null);
+      }
     });
   },
 
@@ -360,6 +377,30 @@ const Exporter = {
     }
   },
 
+  // ── Render parameter builders ────────────────────────────────────────────
+
+  /** Build bgState/textState/layoutState from a slide object for rendering */
+  buildRenderParams(slide, orientation) {
+    return {
+      bgState: {
+        bgType: slide.bgType, bgFrom: slide.bgFrom, bgTo: slide.bgTo,
+        bgAngle: slide.bgAngle, bgSolid: slide.bgSolid,
+        bgSplitTop: slide.bgSplitTop, bgSplitBottom: slide.bgSplitBottom,
+      },
+      textState: {
+        headline: slide.headline, subheadline: slide.subheadline,
+        hlFontSize: slide.headlineSize, hlColor: slide.textColor,
+        slFontSize: slide.subheadlineSize, slColor: slide.subheadlineColor,
+      },
+      layoutState: {
+        phoneXFrac: slide.phoneXFrac, phoneYFrac: slide.phoneYFrac, phoneAngle: slide.phoneAngle,
+        headlineXFrac: slide.headlineXFrac, headlineYFrac: slide.headlineYFrac, headlineAngle: slide.headlineAngle,
+        subheadlineXFrac: slide.subheadlineXFrac, subheadlineYFrac: slide.subheadlineYFrac, subheadlineAngle: slide.subheadlineAngle,
+        orientation: orientation || slide.orientation || 'portrait',
+      },
+    };
+  },
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   /**
@@ -376,8 +417,10 @@ const Exporter = {
 
     return new Promise((resolve, reject) => {
       const img = new Image();
-      // crossOrigin is needed for data URIs and remote URLs to keep canvas clean
-      if (src.startsWith('data:') || src.startsWith('http') || src.startsWith('blob:')) {
+      // Only set crossOrigin for HTTP URLs — data: and blob: URLs are always
+      // same-origin and setting crossOrigin on them can taint the canvas in
+      // some browsers (notably Safari).
+      if (src.startsWith('http')) {
         img.crossOrigin = 'anonymous';
       }
       img.onload  = () => resolve(img);
@@ -388,52 +431,39 @@ const Exporter = {
 
   /**
    * Load a device frame image in a way that never taints the canvas.
-   * Uses fetch → blob → object URL to guarantee same-origin, with
-   * canvas round-trip as fallback.
+   * Uses fetch → blob URL (same-origin, no taint). On file:// where
+   * fetch is blocked, falls back to a plain <img> load (may taint
+   * canvas for toDataURL, but still works for direct canvas display).
    */
   async _loadFrame(path) {
     if (this._frameCache[path]) return this._frameCache[path];
 
     let img;
+    if (window.location.protocol !== 'file:') {
+      // HTTP: fetch → blob URL — guaranteed same-origin, no taint
+      try {
+        const resp = await fetch(path);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        img = await new Promise((resolve, reject) => {
+          const el = new Image();
+          el.onload  = () => resolve(el);
+          el.onerror = reject;
+          el.src = url;
+        });
+      } catch (_) {}
+    }
 
-    try {
-      // Preferred: fetch produces a same-origin blob URL — no canvas taint
-      const resp = await fetch(path);
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
+    if (!img) {
+      // file:// or fetch failed: load via <img> directly.
+      // May taint canvases (toDataURL fails), but _renderSlide
+      // handles this by returning the canvas element for display.
       img = await new Promise((resolve, reject) => {
-        const el = new Image();
-        el.onload  = () => resolve(el);
-        el.onerror = reject;
-        el.src = url;
-      });
-    } catch (_) {
-      // Fallback: load directly + canvas sanitization
-      const rawImg = await new Promise((resolve, reject) => {
         const el = new Image();
         el.onload  = () => resolve(el);
         el.onerror = reject;
         el.src = path;
       });
-
-      try {
-        const c = document.createElement('canvas');
-        c.width  = rawImg.naturalWidth  || rawImg.width;
-        c.height = rawImg.naturalHeight || rawImg.height;
-        c.getContext('2d').drawImage(rawImg, 0, 0);
-        const dataUrl = c.toDataURL('image/png');
-        c.width = 0;
-
-        img = await new Promise((resolve, reject) => {
-          const el = new Image();
-          el.onload  = () => resolve(el);
-          el.onerror = reject;
-          el.src = dataUrl;
-        });
-      } catch (_) {
-        // Last resort: use raw image directly
-        img = rawImg;
-      }
     }
 
     this._frameCache[path] = img;

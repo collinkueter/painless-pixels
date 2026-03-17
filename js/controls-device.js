@@ -79,7 +79,7 @@
         Editor.switchDevice(S.activeDevice, S.orientation);
         PP.renderSlideList();
         if (S.slides.length) PP.loadActiveSlide();
-        PP.renderCanvasStrip();
+        PP.updateCanvasNav();
         PP.updateSlideAspectRatio();
         PP.updateExportCounts();
         PP.markDirty();
@@ -115,7 +115,7 @@
     if (S.slides.length) {
       PP.loadActiveSlide();
     }
-    PP.renderCanvasStrip();
+    PP.updateCanvasNav();
 
     PP.updateSlideAspectRatio();
     PP.updateExportCounts();

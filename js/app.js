@@ -61,6 +61,7 @@
     initEditor();
     initExportOverlay();
     initShortcutsOverlay();
+    initPreviewOverlay();
     wireFileOperations();
 
     var saved = null;
@@ -311,12 +312,58 @@
 
   // ── Context Toolbar ──────────────────────────────────────────────
 
+  // ── Text visibility helpers ────────────────────────────────────────
+
+  function updateTextFieldVisibility() {
+    var hlFields = Utils.$('#headline-fields');
+    var hlAddBtn = Utils.$('#add-headline-btn');
+    var slFields = Utils.$('#subheadline-fields');
+    var slAddBtn = Utils.$('#add-subheadline-btn');
+    var hasHL = !!S.headline;
+    var hasSL = !!S.subheadline;
+    if (hlFields) hlFields.style.display = hasHL ? '' : 'none';
+    if (hlAddBtn) hlAddBtn.classList.toggle('hidden', hasHL);
+    if (slFields) slFields.style.display = hasSL ? '' : 'none';
+    if (slAddBtn) slAddBtn.classList.toggle('hidden', hasSL);
+  }
+
+  function wireTextAddButtons() {
+    var hlAddBtn = Utils.$('#add-headline-btn');
+    var slAddBtn = Utils.$('#add-subheadline-btn');
+
+    if (hlAddBtn) {
+      hlAddBtn.addEventListener('click', function () {
+        S.headline = PP.DEFAULTS.headline;
+        PP.applyCurrentTemplate();
+        PP.markDirty();
+        updateTextFieldVisibility();
+        var hlInput = Utils.$('#headline-input');
+        if (hlInput) { hlInput.value = S.headline; hlInput.focus(); hlInput.select(); }
+      });
+    }
+    if (slAddBtn) {
+      slAddBtn.addEventListener('click', function () {
+        S.subheadline = PP.DEFAULTS.subheadline;
+        PP.applyCurrentTemplate();
+        PP.markDirty();
+        updateTextFieldVisibility();
+        var slInput = Utils.$('#subheadline-input');
+        if (slInput) { slInput.value = S.subheadline; slInput.focus(); slInput.select(); }
+      });
+    }
+
+    // Sync visibility when text changes via sidebar inputs
+    S._subscribe('headline', updateTextFieldVisibility);
+    S._subscribe('subheadline', updateTextFieldVisibility);
+  }
+
   function wireContextToolbar() {
     var toolbar   = Utils.$('#context-toolbar');
     var sizeInput = Utils.$('#ctx-font-size');
     var colorInput = Utils.$('#ctx-text-color');
     var colorSwatch = Utils.$('#ctx-color-swatch');
     var moreBtn   = Utils.$('#ctx-more-btn');
+    var deleteBtn = Utils.$('#ctx-delete-btn');
     if (!toolbar) return;
 
     var _activeTarget = null; // 'headline' or 'subheadline'
@@ -438,6 +485,26 @@
         textSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     });
+
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', function () {
+        if (!_activeTarget) return;
+        if (_activeTarget === 'headline') {
+          S.headline = '';
+          var hlInput = Utils.$('#headline-input');
+          if (hlInput) hlInput.value = '';
+        } else {
+          S.subheadline = '';
+          var slInput = Utils.$('#subheadline-input');
+          if (slInput) slInput.value = '';
+        }
+        Editor.canvas.discardActiveObject();
+        Editor.canvas.renderAll();
+        hideToolbar();
+        PP.applyCurrentTemplate();
+        PP.markDirty();
+      });
+    }
   }
 
   // ── Sidebar collapse logic ───────────────────────────────────────
@@ -502,8 +569,10 @@
     wireHeaderBtns();
     wireApplyAll();
 
-    // Context toolbar
+    // Context toolbar + text add/remove
     wireContextToolbar();
+    wireTextAddButtons();
+    updateTextFieldVisibility();
 
     // Sync canvas IText edits back to State
     Editor._onTextChange = function (key, value) {
@@ -557,6 +626,7 @@
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         Utils.$('#canvas-wrapper').classList.add('loaded');
+        Editor.fitCanvasToArea();
         var firstInput = Utils.$('#headline-input');
         if (firstInput) firstInput.focus();
       });
@@ -564,7 +634,7 @@
 
     PP.renderSlideList();
     PP.loadActiveSlide();
-    PP.renderCanvasStrip();
+    PP.updateCanvasNav();
     PP.updateExportCounts();
   }
 
@@ -612,7 +682,6 @@
           slide.headlineXFrac = null; slide.headlineYFrac = null; slide.headlineAngle = 0;
           slide.subheadlineXFrac = null; slide.subheadlineYFrac = null; slide.subheadlineAngle = 0;
         });
-        PP.renderCanvasStrip();
         PP.markDirty();
         flashApplyAll(tplBtn);
       });
@@ -630,7 +699,6 @@
           slide.bgSplitTop    = settings.bgSplitTop;
           slide.bgSplitBottom = settings.bgSplitBottom;
         });
-        PP.renderCanvasStrip();
         PP.markDirty();
         flashApplyAll(bgBtn);
       });
@@ -704,6 +772,138 @@
     // Expose for keyboard shortcut handler
     PP._openShortcuts = openShortcuts;
     PP._closeShortcuts = closeShortcuts;
+  }
+
+  // ── Preview Overlay ──────────────────────────────────────────────────
+
+  function initPreviewOverlay() {
+    var overlay = Utils.$('#preview-overlay');
+    var panel = overlay ? overlay.querySelector('.preview-panel') : null;
+    var backdrop = Utils.$('#preview-backdrop');
+    var closeBtn = Utils.$('#preview-close');
+    var grid = Utils.$('#preview-grid');
+    var openBtn = Utils.$('#preview-btn');
+    if (!overlay || !grid) return;
+
+    async function renderAllSlides() {
+      grid.innerHTML = '';
+      var slides = S.slides;
+      if (!slides.length) return;
+
+      try {
+        await document.fonts.load('bold 40px Syne').catch(function () {});
+        await document.fonts.load('normal 40px Syne').catch(function () {});
+      } catch (_) {}
+
+      var deviceSpecs = Devices.EXPORT_SPECS[S.activeDevice] || [];
+      var spec = deviceSpecs[0] || { w: 1260, h: 2736 };
+      var previewW = Math.round(spec.w / 3);
+      var previewH = Math.round(spec.h / 3);
+      var frameImg = await Exporter._loadFrame(Devices.FRAME_PATH[S.activeDevice]).catch(function () { return null; });
+
+      for (var i = 0; i < slides.length; i++) {
+        var slide = slides[i];
+
+        var item = document.createElement('div');
+        item.className = 'preview-grid-item';
+
+        var img = document.createElement('img');
+        img.className = 'preview-loading';
+        img.alt = 'Slide ' + (i + 1) + (slide.headline ? ': ' + slide.headline : '');
+        img.width = previewW;
+        img.height = previewH;
+
+        var label = document.createElement('span');
+        label.className = 'preview-grid-label';
+        label.textContent = (i + 1) + ' / ' + slides.length;
+
+        item.appendChild(img);
+        item.appendChild(label);
+        grid.appendChild(item);
+
+        renderSlideInto(item, slide, i, previewW, previewH, frameImg);
+      }
+    }
+
+    async function renderSlideInto(container, slide, idx, w, h, frameImg) {
+      var imgEl = container.querySelector('img');
+      try {
+        var tmpl = Templates.getById(slide.templateId);
+        var imgSrc = PP.getSlideImage(slide);
+        var screenshotImg = await Exporter._loadImage(imgSrc).catch(function () { return null; });
+        var params = Exporter.buildRenderParams(slide, S.orientation);
+
+        var result = await Exporter._renderSlide({
+          spec: { w: w, h: h, asDataURL: true },
+          device: S.activeDevice,
+          tmpl: tmpl,
+          bgState: params.bgState,
+          textState: params.textState,
+          layoutState: params.layoutState,
+          screenshotImg: screenshotImg,
+          frameImg: frameImg,
+        });
+
+        if (typeof result === 'string') {
+          // Got a data URL
+          imgEl.src = result;
+          imgEl.classList.remove('preview-loading');
+        } else if (result && result.tagName === 'CANVAS') {
+          // Got a canvas element (file:// taint fallback) — swap into DOM
+          result.style.borderRadius = '4px';
+          result.style.display = 'block';
+          result.style.maxHeight = 'calc(100vh - 140px)';
+          result.style.width = '100%';
+          result.style.height = 'auto';
+          container.replaceChild(result, imgEl);
+        }
+      } catch (err) {
+        if (typeof console !== 'undefined') console.warn('[Preview] Slide ' + (idx + 1) + ' failed:', err);
+        imgEl.classList.remove('preview-loading');
+      }
+    }
+
+    function openPreview() {
+      PP.syncActiveSlide();
+      Utils.show(overlay);
+      renderAllSlides();
+      if (closeBtn) closeBtn.focus();
+    }
+
+    function closePreview() {
+      Utils.hide(overlay);
+      grid.innerHTML = '';
+      if (openBtn) openBtn.focus();
+    }
+
+    if (openBtn) openBtn.addEventListener('click', openPreview);
+    if (closeBtn) closeBtn.addEventListener('click', closePreview);
+    if (backdrop) backdrop.addEventListener('click', closePreview);
+
+    // Focus trap
+    if (panel) {
+      panel.addEventListener('keydown', function (e) {
+        if (e.key !== 'Tab') return;
+        var focusable = panel.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable.length) return;
+        var first = focusable[0];
+        var last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      });
+    }
+
+    PP._closePreview = closePreview;
+    PP._isPreviewOpen = function () {
+      return overlay && !overlay.classList.contains('hidden');
+    };
   }
 
   function initExportOverlay() {
@@ -888,22 +1088,20 @@
       var spec = deviceSpecs[0] || { w: 1260, h: 2736 };
       await document.fonts.load('bold 40px Syne').catch(function () {});
 
+      PP.syncActiveSlide();
       var tmpl = Templates.getById(S.templateId);
       var frameImg = await Exporter._loadFrame(Devices.FRAME_PATH[S.activeDevice]).catch(function () { return null; });
       var imgSrc = PP.getSlideImage(slide);
       var screenshotImg = await Exporter._loadImage(imgSrc).catch(function () { return null; });
 
+      var params = Exporter.buildRenderParams(slide, S.orientation);
       blob = await Exporter._renderSlide({
         spec: spec,
         device: S.activeDevice,
         tmpl: tmpl,
-        bgState: {
-          bgType: S.bgType, bgFrom: S.bgFrom, bgTo: S.bgTo,
-          bgAngle: S.bgAngle, bgSolid: S.bgSolid,
-          bgSplitTop: S.bgSplitTop, bgSplitBottom: S.bgSplitBottom,
-        },
-        textState: Editor.getTextState(),
-        layoutState: PP.getLayoutOverrides(),
+        bgState: params.bgState,
+        textState: params.textState,
+        layoutState: params.layoutState,
         screenshotImg: screenshotImg,
         frameImg: frameImg,
       });
@@ -976,6 +1174,10 @@
     if (e.key === 'Escape') {
       var dropdown = Utils.$('#new-design-dropdown');
       if (dropdown) { dropdown.remove(); return; }
+      if (PP._isPreviewOpen && PP._isPreviewOpen()) {
+        PP._closePreview();
+        return;
+      }
       var shortcutsOvl = Utils.$('#shortcuts-overlay');
       if (shortcutsOvl && !shortcutsOvl.classList.contains('hidden')) {
         if (PP._closeShortcuts) PP._closeShortcuts();
@@ -998,38 +1200,12 @@
 
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       if (editorActive && S.slides.length > 1) {
-        var next = (S.activeSlideIndex + 1) % S.slides.length;
-        if (next !== S.activeSlideIndex) {
-          S.activeSlideIndex = next;
-          Utils.$$('.slide-item').forEach(function (el, i) {
-            el.classList.toggle('active', i === next);
-            el.setAttribute('aria-selected', i === next ? 'true' : 'false');
-            el.setAttribute('tabindex', i === next ? '0' : '-1');
-          });
-          var activeItem = Utils.$('.slide-item.active');
-          if (activeItem) activeItem.focus();
-          PP.loadActiveSlide();
-          PP.renderCanvasStrip();
-          PP.markDirty();
-        }
+        PP.switchToSlide((S.activeSlideIndex + 1) % S.slides.length);
       }
     }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       if (editorActive && S.slides.length > 1) {
-        var prev = (S.activeSlideIndex - 1 + S.slides.length) % S.slides.length;
-        if (prev !== S.activeSlideIndex) {
-          S.activeSlideIndex = prev;
-          Utils.$$('.slide-item').forEach(function (el, i) {
-            el.classList.toggle('active', i === prev);
-            el.setAttribute('aria-selected', i === prev ? 'true' : 'false');
-            el.setAttribute('tabindex', i === prev ? '0' : '-1');
-          });
-          var activeItem2 = Utils.$('.slide-item.active');
-          if (activeItem2) activeItem2.focus();
-          PP.loadActiveSlide();
-          PP.renderCanvasStrip();
-          PP.markDirty();
-        }
+        PP.switchToSlide((S.activeSlideIndex - 1 + S.slides.length) % S.slides.length);
       }
     }
   });

@@ -140,6 +140,13 @@
           Add Screenshots
         </button>
         <button class="shortcuts-hint" id="shortcuts-hint-btn" title="Press ? to see all shortcuts" type="button">?</button>
+        <button class="btn-ghost" id="preview-btn" aria-label="Preview current slide">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M1 7C1 7 3.5 2 7 2C10.5 2 13 7 13 7C13 7 10.5 12 7 12C3.5 12 1 7 1 7Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+            <circle cx="7" cy="7" r="2" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+          <span class="btn-label">Preview</span>
+        </button>
         <button class="btn-accent" id="export-btn" aria-label="Export all sizes">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M7 1V9M7 9L4 6M7 9L10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -212,40 +219,46 @@
             </svg>
           </button>
           <div class="section-body">
-            <div class="field-group">
-              <label class="field-label" for="headline-input">Headline</label>
-              <input type="text" class="field-input" id="headline-input" placeholder="Your App Headline" maxlength="60">
-            </div>
-            <div class="field-row">
-              <div class="field-group half">
-                <label class="field-label" for="headline-size">Size</label>
-                <input type="number" class="field-input mono" id="headline-size" value="38" min="10" max="120">
+            <div id="headline-fields">
+              <div class="field-group">
+                <label class="field-label" for="headline-input">Headline</label>
+                <input type="text" class="field-input" id="headline-input" placeholder="Your App Headline" maxlength="60">
               </div>
-              <div class="field-group half">
-                <label class="field-label" for="text-color">Color</label>
-                <div class="color-swatch-wrap">
-                  <input type="color" id="text-color" value="#ffffff">
-                  <span class="color-hex" id="text-color-hex">#ffffff</span>
+              <div class="field-row">
+                <div class="field-group half">
+                  <label class="field-label" for="headline-size">Size</label>
+                  <input type="number" class="field-input mono" id="headline-size" value="38" min="10" max="120">
+                </div>
+                <div class="field-group half">
+                  <label class="field-label" for="text-color">Color</label>
+                  <div class="color-swatch-wrap">
+                    <input type="color" id="text-color" value="#ffffff">
+                    <span class="color-hex" id="text-color-hex">#ffffff</span>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="field-group">
-              <label class="field-label" for="subheadline-input">Subheadline</label>
-              <input type="text" class="field-input" id="subheadline-input" placeholder="The perfect description" maxlength="100">
-            </div>
-            <div class="field-row">
-              <div class="field-group half">
-                <label class="field-label" for="subheadline-size">Size</label>
-                <input type="number" class="field-input mono" id="subheadline-size" value="20" min="10" max="120">
+            <button class="add-text-btn hidden" id="add-headline-btn" type="button">+ Add headline</button>
+            <div id="subheadline-fields">
+              <div class="field-group">
+                <label class="field-label" for="subheadline-input">Subheadline</label>
+                <input type="text" class="field-input" id="subheadline-input" placeholder="The perfect description" maxlength="100">
               </div>
-              <div class="field-group half">
-                <label class="field-label" for="subheadline-color">Color</label>
-                <div class="color-swatch-wrap">
-                  <input type="color" id="subheadline-color" value="#aaaaaa">
-                  <span class="color-hex" id="subheadline-color-hex">#aaaaaa</span>
+              <div class="field-row">
+                <div class="field-group half">
+                  <label class="field-label" for="subheadline-size">Size</label>
+                  <input type="number" class="field-input mono" id="subheadline-size" value="20" min="10" max="120">
+                </div>
+                <div class="field-group half">
+                  <label class="field-label" for="subheadline-color">Color</label>
+                  <div class="color-swatch-wrap">
+                    <input type="color" id="subheadline-color" value="#aaaaaa">
+                    <span class="color-hex" id="subheadline-color-hex">#aaaaaa</span>
+                  </div>
                 </div>
               </div>
             </div>
+            <button class="add-text-btn hidden" id="add-subheadline-btn" type="button">+ Add subheadline</button>
           </div>
         </div>
 
@@ -364,15 +377,24 @@
             <circle cx="10" cy="6" r="1" fill="currentColor"/>
           </svg>
         </button>
+        <div class="ctx-divider"></div>
+        <button class="ctx-btn ctx-btn-delete" id="ctx-delete-btn" title="Remove text">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M2 3H10M4.5 3V2H7.5V3M3 3V10Q3 11 4 11H8Q9 11 9 10V3" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
 
       <!-- Canvas Area -->
       <main class="canvas-area" id="canvas-area">
-        <div class="canvas-scroll">
-          <div class="canvas-container" id="canvas-container">
-            <div class="canvas-wrapper" id="canvas-wrapper">
-              <canvas id="main-canvas" aria-label="Screenshot preview canvas. Edit using the sidebar controls."></canvas>
-            </div>
+        <div class="canvas-center">
+          <div class="canvas-wrapper" id="canvas-wrapper">
+            <canvas id="main-canvas" aria-label="Screenshot preview canvas. Edit using the sidebar controls."></canvas>
+          </div>
+          <div class="canvas-nav" id="canvas-nav" role="group" aria-label="Slide navigation">
+            <button class="canvas-nav-btn" id="prev-slide-btn" aria-label="Previous slide" title="Previous slide">&larr;</button>
+            <span class="canvas-nav-label" id="canvas-nav-label" aria-live="polite">1 / 1</span>
+            <button class="canvas-nav-btn" id="next-slide-btn" aria-label="Next slide" title="Next slide">&rarr;</button>
           </div>
         </div>
       </main>
@@ -479,9 +501,24 @@
         <div class="shortcut-row"><kbd>Cmd+S</kbd><span>Download .pp file</span></div>
         <div class="shortcut-row"><kbd>Cmd+O</kbd><span>Open .pp file</span></div>
         <div class="shortcut-row"><kbd>Cmd+E</kbd><span>Export all sizes</span></div>
-        <div class="shortcut-row"><kbd>Arrow Left/Right</kbd><span>Switch slides</span></div>
+        <div class="shortcut-row"><kbd>Arrow Keys</kbd><span>Switch slides</span></div>
         <div class="shortcut-row"><kbd>Esc</kbd><span>Close overlay</span></div>
         <div class="shortcut-row"><kbd>?</kbd><span>Show this overlay</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────────────────── PREVIEW OVERLAY ───────────────────────── -->
+  <div id="preview-overlay" class="overlay hidden">
+    <div class="overlay-backdrop" id="preview-backdrop"></div>
+    <div class="preview-panel" role="dialog" aria-modal="true" aria-label="Slide preview">
+      <button class="overlay-close preview-close" id="preview-close" aria-label="Close preview (Esc)">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3 3L13 13M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <div class="preview-grid" id="preview-grid" aria-label="All slides preview">
+        <!-- Rendered images injected by JS -->
       </div>
     </div>
   </div>
