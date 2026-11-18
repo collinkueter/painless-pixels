@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="css/reset.css">
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/editor.css">
+  <link rel="stylesheet" href="css/buckets.css">
   <script>
     (function(){
       var t=localStorage.getItem('pp-theme');
@@ -44,26 +45,18 @@
         </div>
       </div>
 
-      <div class="upload-zone" id="upload-zone" tabindex="0" role="button" aria-label="Drop zone for app screenshots. Press Enter or Space to browse files.">
-        <div class="upload-zone-glow"></div>
-        <div class="upload-zone-inner">
-          <div class="upload-icon-wrap">
-            <svg class="upload-icon" width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-              <path d="M20 6V28" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M12 14L20 6L28 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M6 32H34" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <h1 class="upload-title">Drop your raw app screenshots here</h1>
-          <p class="upload-subtitle">We wrap them in a branded frame and export every App Store &amp; Google Play size in one ZIP.</p>
-          <button class="btn-accent upload-browse-btn" id="browse-btn">Browse Files</button>
-          <input type="file" id="file-input" accept="image/*" multiple hidden>
-        </div>
-        <div class="upload-formats">
-          <div class="format-chip">iPhone</div>
-          <div class="format-chip">iPad</div>
-          <div class="format-chip">Android</div>
-        </div>
+      <div class="upload-hero-top">
+        <h1 class="upload-title">Upload your app screenshots</h1>
+        <p class="upload-subtitle">Add screenshots to each device bucket, then open the editor to design and export every App Store &amp; Google Play size.</p>
+      </div>
+
+      <div class="upload-buckets-grid" id="upload-buckets-grid">
+        <!-- Populated by PP.Buckets.renderUploadStep() -->
+      </div>
+
+      <div class="upload-editor-cta">
+        <button class="btn-accent" id="open-editor-btn">Open Editor</button>
+        <button class="upload-skip-link" id="skip-editor-btn">Skip — go to editor</button>
       </div>
 
       <div class="upload-footer">
@@ -85,7 +78,7 @@
     <header class="app-header">
       <div class="header-left">
         <div class="app-logo">
-          <div class="logo-mark-sm"><img src="assets/logo.jpg" alt="Painless Pixels" class="logo-img"></div>
+          <div class="logo-mark-sm"><img src="assets/logo.jpg" alt="" class="logo-img"></div>
           <span class="logo-name-sm">Painless Pixels</span>
         </div>
         <div class="step-track" role="list" aria-label="Progress steps">
@@ -399,18 +392,24 @@
         </div>
       </main>
 
-      <!-- Right: Slides Panel -->
+      <!-- Right: Slides + Image Library Panel -->
       <aside class="slides-panel">
         <div class="slides-header">
           <span class="section-label">Slides</span>
-          <button class="icon-btn" id="add-slide-btn" aria-label="Add screenshot">
+          <button class="icon-btn" id="add-slide-btn" aria-label="Add empty slide">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M6 1V11M1 6H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </button>
         </div>
-        <div class="slides-list" id="slides-list" role="listbox" aria-label="Slides">
-          <!-- Injected by app.js -->
+        <div class="slides-list" id="slides-list" role="list" aria-label="Slides">
+          <!-- Injected by slides.js -->
+        </div>
+        <div class="image-library-header">
+          <span class="image-library-label" id="image-library-label">Image Library</span>
+        </div>
+        <div id="buckets-list" role="region" aria-labelledby="image-library-label">
+          <!-- Injected by buckets.js -->
         </div>
       </aside>
 
@@ -548,6 +547,9 @@
   <script src="js/controls-device.js"></script>
   <script src="js/controls-layout.js"></script>
   <script src="js/slides.js"></script>
+
+  <!-- Image bucket module -->
+  <script src="js/buckets.js"></script>
 
   <!-- App orchestrator (last — calls init functions from above) -->
   <script src="js/app.js"></script>

@@ -31,7 +31,7 @@ const Previewer = {
       await document.fonts.load('normal 40px Syne');
     } catch (_) {}
 
-    const device   = state.device || 'iphone';
+    const device   = state.activeDevice || 'iphone';
     const preview  = Devices.PREVIEW[device];
     const spec     = { w: preview.w, h: preview.h };
     const tmpl     = Templates.getById(state.templateId);
@@ -55,11 +55,13 @@ const Previewer = {
     sub.textContent = `${state.slides.length} slide${state.slides.length !== 1 ? 's' : ''}`;
 
     for (const [i, slide] of state.slides.entries()) {
-      const screenshotImg = await Exporter._loadImage(slide.imageData).catch(() => null);
+      const screenshotImg = await Exporter._loadImage(PP.getSlideImageForDevice(slide, device)).catch(() => null);
       const blob = await Exporter._renderSlide({
         spec, device, tmpl, bgState, textState, layoutState: layoutState || {},
         screenshotImg, frameImg,
       });
+
+      if (!blob) continue;
 
       const url = URL.createObjectURL(blob);
       this._objectURLs.push(url);

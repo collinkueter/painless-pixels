@@ -113,6 +113,13 @@ var PP = {};
   PP.State = createReactiveState(Object.assign({
     slides:           [],
     activeSlideIndex: 0,
+    buckets: {
+      'iphone':        [],
+      'ipad':          [],
+      'android-phone': [],
+      'android-7':     [],
+      'android-10':    [],
+    },
     phoneXFrac:       null,
     phoneYFrac:       null,
     phoneAngle:       0,
@@ -126,12 +133,34 @@ var PP = {};
 
   // ── Shared helpers ────────────────────────────────────────────────────
 
-  /** Get the image URL for a slide based on the active device form factor */
-  PP.getSlideImage = function (slide) {
-    if (Devices.isTablet(PP.State.activeDevice) && slide.tabletImageData) {
+  /** Get the image URL for a slide for a specific device */
+  PP.getSlideImageForDevice = function (slide, device) {
+    // 1. Check deviceImages for this device
+    if (slide.deviceImages && slide.deviceImages[device]) {
+      var entry = PP.getBucketEntry(device, slide.deviceImages[device]);
+      if (entry && entry.imageData) return entry.imageData;
+    }
+    // 2. Fall back to tabletImageData for tablets (legacy)
+    if (Devices.isTablet(device) && slide.tabletImageData) {
       return slide.tabletImageData;
     }
-    return slide.imageData;
+    // 3. Fall back to imageData (legacy)
+    return slide.imageData || null;
+  };
+
+  /** Get the image URL for a slide based on the active device form factor */
+  PP.getSlideImage = function (slide) {
+    return PP.getSlideImageForDevice(slide, PP.State.activeDevice);
+  };
+
+  /** Look up a bucket entry by device and id */
+  PP.getBucketEntry = function (device, id) {
+    var bucket = PP.State.buckets && PP.State.buckets[device];
+    if (!bucket) return null;
+    for (var i = 0; i < bucket.length; i++) {
+      if (bucket[i].id === id) return bucket[i];
+    }
+    return null;
   };
 
   /** Write current State design settings back into the active slide */

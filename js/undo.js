@@ -25,6 +25,7 @@
     if (slide) {
       if (slide.imageData) snap.imageData = slide.imageData;
       if (slide.tabletImageData) snap.tabletImageData = slide.tabletImageData;
+      if (slide.deviceImages) snap.deviceImages = Object.assign({}, slide.deviceImages);
     }
     return snap;
   }
@@ -70,6 +71,17 @@
       Object.assign(slide, snap.settings);
       if (snap.imageData !== undefined) slide.imageData = snap.imageData;
       if (snap.tabletImageData !== undefined) slide.tabletImageData = snap.tabletImageData;
+      if (snap.deviceImages !== undefined) {
+        var restoredImages = Object.assign({}, snap.deviceImages);
+        // Null out any refs that no longer exist in buckets (bucket may have been deleted since snapshot)
+        Object.keys(restoredImages).forEach(function (dev) {
+          var id = restoredImages[dev];
+          if (id && PP.getBucketEntry && !PP.getBucketEntry(dev, id)) {
+            restoredImages[dev] = null;
+          }
+        });
+        slide.deviceImages = restoredImages;
+      }
     }
 
     PP.loadSlideSettings(snap.settings);
@@ -89,6 +101,8 @@
     PP.applyCurrentTemplate();
     PP.renderSlideList();
     PP.updateCanvasNav();  // explicit call since undo may not change activeSlideIndex
+    PP.loadActiveSlide();
+    if (PP.Buckets) PP.Buckets.render();
     PP.syncActiveSlide();
     Storage.scheduleSave(S);
 

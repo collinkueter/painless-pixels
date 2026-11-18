@@ -53,7 +53,6 @@ const Upload = {
         const imageData = await Utils.loadFileAsDataURL(file);
         slides.push({
           id:        Utils.uid(),
-          file,
           imageData,
           title:     file.name.replace(/\.[^.]+$/, ''),
         });
@@ -76,7 +75,6 @@ const Upload = {
         const imageData = await Utils.loadFileAsDataURL(file);
         slides.push({
           id:        Utils.uid(),
-          file,
           imageData,
           title:     file.name.replace(/\.[^.]+$/, ''),
         });
@@ -87,7 +85,34 @@ const Upload = {
     return slides;
   },
 
+  /**
+   * Convert File objects to image bucket entries (no slide properties).
+   * Returns Promise<[{id, imageData, title}]>.
+   */
+  async filesToImages(files) {
+    const batch = this._filterImages(Array.from(files)).slice(0, 20);
+    const images = [];
+    for (const file of batch) {
+      try {
+        const imageData = await Utils.loadFileAsDataURL(file);
+        images.push({
+          id:        Utils.uid(),
+          imageData,
+          title:     file.name.replace(/\.[^.]+$/, ''),
+        });
+      } catch (_) {
+        // Skip files that fail to load
+      }
+    }
+    return images;
+  },
+
   _filterImages(files) {
-    return files.filter(f => f.type.startsWith('image/'));
+    var MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+    return files.filter(function (f) {
+      return f.type.startsWith('image/') &&
+             f.type !== 'image/svg+xml' &&
+             f.size <= MAX_FILE_SIZE;
+    });
   },
 };

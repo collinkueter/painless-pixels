@@ -72,7 +72,14 @@
       if (typeof console !== 'undefined') console.warn('[PP] Failed to load session:', e);
     }
 
-    if (saved && saved.slides && saved.slides.length) {
+    var hasContent = saved && (
+      (saved.slides && saved.slides.length) ||
+      (saved.buckets && ['iphone','ipad','android-phone','android-7','android-10'].some(function (d) {
+        return saved.buckets[d] && saved.buckets[d].length;
+      }))
+    );
+
+    if (hasContent) {
       Utils.$('#step-upload').classList.remove('active');
       restoreState(saved);
       triggerInitialSync();
@@ -124,10 +131,11 @@
   // ── Restore from saved data ───────────────────────────────────────────
 
   function restoreState(data) {
-    S.slides           = data.slides;
+    S.slides           = data.slides || [];
     S.activeDevice     = data.activeDevice || 'iphone';
     S.orientation      = data.orientation || 'portrait';
     S.activeSlideIndex = Math.min(data.activeSlideIndex || 0, Math.max(0, S.slides.length - 1));
+    if (data.buckets) S.buckets = data.buckets;
     var active = S.slides[S.activeSlideIndex];
     if (active) PP.loadSlideSettings(active);
   }
@@ -276,35 +284,51 @@
   // ══════════════════════════════════════════════════════════════════════
 
   function initUploadStep() {
-    var zone      = Utils.$('#upload-zone');
-    var fileInput = Utils.$('#file-input');
-    var browseBtn = Utils.$('#browse-btn');
+    // Render the 5-device bucket zones in step 1
+    if (PP.Buckets) PP.Buckets.renderUploadStep();
 
-    browseBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      fileInput.click();
-    });
-
-    Upload.init(zone, fileInput, function (slides) {
-      var isTablet = Devices.isTablet(S.activeDevice);
-      var settings = PP.captureCurrentSettings();
-      slides.forEach(function (s) {
-        Object.assign(s, settings);
-        s.tabletImageData = isTablet ? s.imageData : null;
+    // "Open Editor" button — transitions to editor with 1 empty slide
+    var openEditorBtn = Utils.$('#open-editor-btn');
+    if (openEditorBtn) {
+      openEditorBtn.addEventListener('click', function () {
+        // Create at least 1 empty slide so the editor has something to show
+        if (!S.slides.length) {
+          S.slides = [createEmptySlide()];
+          S.activeSlideIndex = 0;
+        }
+        transitionToEditor();
+        PP.markDirty();
       });
-      S.slides = slides;
-      S.activeSlideIndex = 0;
-      transitionToEditor();
-      PP.markDirty();
-    });
+    }
 
-    zone.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        fileInput.click();
-      }
-    });
+    // "Skip to editor" — same as open editor
+    var skipBtn = Utils.$('#skip-editor-btn');
+    if (skipBtn) {
+      skipBtn.addEventListener('click', function () {
+        if (!S.slides.length) {
+          S.slides = [createEmptySlide()];
+          S.activeSlideIndex = 0;
+        }
+        transitionToEditor();
+        PP.markDirty();
+      });
+    }
   }
+
+  /** Create a new empty slide with default design settings */
+  function createEmptySlide() {
+    var settings = PP.captureCurrentSettings();
+    var slide = Object.assign({
+      id:             Utils.uid(),
+      imageData:      null,
+      tabletImageData: null,
+      deviceImages:   { iphone: null, ipad: null, 'android-phone': null, 'android-7': null, 'android-10': null },
+      title:          'Slide ' + (S.slides.length + 1),
+    }, settings);
+    return slide;
+  }
+
+  PP.createEmptySlide = createEmptySlide;
 
   // ══════════════════════════════════════════════════════════════════════
   // STEP 2 — EDITOR
@@ -569,6 +593,11 @@
     wireHeaderBtns();
     wireApplyAll();
 
+    // Re-render bucket library when active device changes (assignment rings update)
+    S._subscribe('activeDevice', function () {
+      if (PP.Buckets) PP.Buckets.render();
+    });
+
     // Context toolbar + text add/remove
     wireContextToolbar();
     wireTextAddButtons();
@@ -636,6 +665,7 @@
     PP.loadActiveSlide();
     PP.updateCanvasNav();
     PP.updateExportCounts();
+    if (PP.Buckets) PP.Buckets.render();
   }
 
   // ── Template ─────────────────────────────────────────────────────────

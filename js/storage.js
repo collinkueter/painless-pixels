@@ -10,10 +10,21 @@ const Storage = (function () {
   var DB_NAME      = 'painless-pixels';
   var STORE_NAME   = 'state';
   var SESSION_KEY  = 'session';
-  var SCHEMA_VERSION = 4;
+  var SCHEMA_VERSION = 5;
 
   var ALLOWED_IMAGE_TYPES = ['data:image/png', 'data:image/jpeg', 'data:image/webp', 'data:image/gif'];
   var MAX_SLIDE_DATA_LENGTH = 20 * 1024 * 1024; // 20MB per slide
+  var MAX_BUCKET_ENTRY_SIZE = 20 * 1024 * 1024; // 20MB per bucket entry
+
+  var BUCKET_DEVICES = ['iphone', 'ipad', 'android-phone', 'android-7', 'android-10'];
+
+  function _emptyBuckets() {
+    return { iphone: [], ipad: [], 'android-phone': [], 'android-7': [], 'android-10': [] };
+  }
+
+  function _uid() {
+    return Math.random().toString(36).slice(2, 9);
+  }
 
   var _db = null;
   var _saveVersion = 0;
@@ -88,8 +99,9 @@ const Storage = (function () {
   function _serializeSlide(s) {
     return {
       id:               s.id,
-      imageData:        s.imageData,
+      imageData:        s.imageData || null,
       tabletImageData:  s.tabletImageData || null,
+      deviceImages:     s.deviceImages || null,
       title:            s.title || 'Untitled',
       templateId:       s.templateId,
       bgType:           s.bgType,
@@ -118,6 +130,40 @@ const Storage = (function () {
     };
   }
 
+  function _isValidBucketEntry(e) {
+    if (!e || typeof e.id !== 'string' || !e.id) return false;
+    if (typeof e.imageData !== 'string') return false;
+    if (e.imageData.length > MAX_BUCKET_ENTRY_SIZE) return false;
+    for (var i = 0; i < ALLOWED_IMAGE_TYPES.length; i++) {
+      if (e.imageData.startsWith(ALLOWED_IMAGE_TYPES[i])) return true;
+    }
+    return false;
+  }
+
+  function _serializeBuckets(buckets) {
+    if (!buckets) return _emptyBuckets();
+    var result = {};
+    BUCKET_DEVICES.forEach(function (dev) {
+      var entries = Array.isArray(buckets[dev]) ? buckets[dev] : [];
+      result[dev] = entries.filter(_isValidBucketEntry).map(function (e) {
+        return { id: e.id, imageData: e.imageData, title: (e.title || '').slice(0, 256) };
+      });
+    });
+    return result;
+  }
+
+  function _deserializeBuckets(data) {
+    if (!data || typeof data !== 'object') return _emptyBuckets();
+    var result = {};
+    BUCKET_DEVICES.forEach(function (dev) {
+      var entries = Array.isArray(data[dev]) ? data[dev] : [];
+      result[dev] = entries.filter(_isValidBucketEntry).map(function (e) {
+        return { id: e.id, imageData: e.imageData, title: (e.title || '').slice(0, 256) };
+      });
+    });
+    return result;
+  }
+
   // ── Serialization ─────────────────────────────────────────────────────
 
   function serialize(state) {
@@ -129,6 +175,7 @@ const Storage = (function () {
       _schemaVersion: SCHEMA_VERSION,
       _savedAt: new Date().toISOString(),
       slides:           slides,
+      buckets: _serializeBuckets(state.buckets),
       activeSlideIndex: state.activeSlideIndex,
       activeDevice:     state.activeDevice,
       orientation:      state.orientation || 'portrait',
@@ -159,12 +206,17 @@ const Storage = (function () {
   }
 
   function _isValidSlide(s) {
-    if (!s || typeof s.imageData !== 'string') return false;
-    if (s.imageData.length > MAX_SLIDE_DATA_LENGTH) return false;
-    for (var i = 0; i < ALLOWED_IMAGE_TYPES.length; i++) {
-      if (s.imageData.startsWith(ALLOWED_IMAGE_TYPES[i])) return true;
+    if (!s || typeof s.id !== 'string' || !s.id) return false;
+    // If imageData is present, validate it
+    if (s.imageData) {
+      if (s.imageData.length > MAX_SLIDE_DATA_LENGTH) return false;
+      for (var i = 0; i < ALLOWED_IMAGE_TYPES.length; i++) {
+        if (s.imageData.startsWith(ALLOWED_IMAGE_TYPES[i])) return true;
+      }
+      return false;
     }
-    return false;
+    // Slides without imageData are valid (image assigned from bucket)
+    return true;
   }
 
   /**
@@ -237,12 +289,45 @@ const Storage = (function () {
     return data;
   }
 
+  /**
+   * Migrate V4 data (flat slides + tabletImageData) to V5 (buckets + deviceImages).
+   * Moves slide.imageData → iphone bucket, slide.tabletImageData → ipad bucket.
+   */
+  function _migrateV4toV5(data) {
+    var buckets = _emptyBuckets();
+    var slides = Array.isArray(data.slides) ? data.slides : [];
+
+    slides.forEach(function (s) {
+      var deviceImages = { iphone: null, ipad: null, 'android-phone': null, 'android-7': null, 'android-10': null };
+
+      // Migrate imageData → iphone bucket
+      if (s.imageData && typeof s.imageData === 'string') {
+        var phoneEntry = { id: _uid(), imageData: s.imageData, title: s.title || 'Screenshot' };
+        buckets.iphone.push(phoneEntry);
+        deviceImages.iphone = phoneEntry.id;
+      }
+      // Migrate tabletImageData → ipad bucket
+      if (s.tabletImageData && typeof s.tabletImageData === 'string') {
+        var tabletEntry = { id: _uid(), imageData: s.tabletImageData, title: s.title || 'Screenshot' };
+        buckets.ipad.push(tabletEntry);
+        deviceImages.ipad = tabletEntry.id;
+      }
+
+      s.deviceImages = deviceImages;
+    });
+
+    data.buckets = buckets;
+    data._schemaVersion = 5;
+    return data;
+  }
+
   function _deserializeSlide(s, data, defaults) {
     return {
       id:               s.id || Utils.uid(),
       file:             null,
       imageData:        s.imageData,
       tabletImageData:  s.tabletImageData || null,
+      deviceImages:     s.deviceImages || { iphone: null, ipad: null, 'android-phone': null, 'android-7': null, 'android-10': null },
       title:            s.title || 'Untitled',
       templateId:       s.templateId || data.templateId || defaults.templateId,
       bgType:           s.bgType || data.bgType || defaults.bgType,
@@ -285,6 +370,10 @@ const Storage = (function () {
     else if (data._schemaVersion === 3) {
       data = _migrateV3toV4(data);
     }
+    // V4 → V5 migration (buckets + deviceImages)
+    if (data._schemaVersion === 4) {
+      data = _migrateV4toV5(data);
+    }
 
     // Build slides from saved data
     var rawSlides = Array.isArray(data.slides) ? data.slides.filter(_isValidSlide) : [];
@@ -292,12 +381,22 @@ const Storage = (function () {
       return _deserializeSlide(s, data, defaults);
     });
 
-    if (!slides.length) return null;
+    var buckets = _deserializeBuckets(data.buckets);
+
+    // Accept if we have slides OR bucket images
+    var hasBucketContent = BUCKET_DEVICES.some(function (dev) {
+      return buckets[dev] && buckets[dev].length > 0;
+    });
+    if (!slides.length && !hasBucketContent) return null;
 
     return {
       _savedAt:         data._savedAt || null,
       slides:           slides,
-      activeSlideIndex: typeof data.activeSlideIndex === 'number' ? data.activeSlideIndex : 0,
+      buckets:          buckets,
+      activeSlideIndex: Math.min(
+        Math.max(0, typeof data.activeSlideIndex === 'number' ? data.activeSlideIndex : 0),
+        Math.max(0, slides.length - 1)
+      ),
       activeDevice:     data.activeDevice || defaults.activeDevice || 'iphone',
       orientation:      data.orientation || 'portrait',
     };
@@ -327,21 +426,32 @@ const Storage = (function () {
     });
   }
 
-  function _hasAnySlides(state) {
-    return state.slides && state.slides.length > 0;
+  function _hasAnyContent(state) {
+    if (state.slides && state.slides.length > 0) return true;
+    if (state.buckets) {
+      for (var i = 0; i < BUCKET_DEVICES.length; i++) {
+        var dev = BUCKET_DEVICES[i];
+        if (state.buckets[dev] && state.buckets[dev].length > 0) return true;
+      }
+    }
+    return false;
   }
 
   function save(state) {
     if (!_idbAvailable) return Promise.resolve();
     var version = ++_saveVersion;
     var data = serialize(state);
-    if (!_hasAnySlides(state)) return Promise.resolve(); // don't save empty/invalid state
+    if (!_hasAnyContent(state)) return Promise.resolve(); // don't save empty/invalid state
     return _put(SESSION_KEY, data).then(function () {
       if (version === _saveVersion && _onSave) {
         _onSave();
       }
     }).catch(function (err) {
-      if (_onError) _onError('save-failed', err);
+      if (err && (err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+        if (_onError) _onError('idb-quota-exceeded', err);
+      } else {
+        if (_onError) _onError('save-failed', err);
+      }
     });
   }
 
@@ -375,10 +485,11 @@ const Storage = (function () {
     } else {
       // Fallback: create temporary download link
       var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
+      var objectURL = URL.createObjectURL(blob);
+      a.href = objectURL;
       a.download = filename || 'design.pp';
       a.click();
-      URL.revokeObjectURL(a.href);
+      setTimeout(function () { URL.revokeObjectURL(objectURL); }, 100);
     }
   }
 

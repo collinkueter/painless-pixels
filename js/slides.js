@@ -39,6 +39,7 @@
     S.activeSlideIndex = newIndex;
     PP.renderSlideList();
     PP.loadActiveSlide();
+    if (PP.Buckets) PP.Buckets.render();
     PP.markDirty();
     return true;
   };
@@ -53,13 +54,17 @@
     slides.forEach(function (slide, idx) {
       var item = document.createElement('div');
       item.className = 'slide-item' + (idx === S.activeSlideIndex ? ' active' : '');
-      item.setAttribute('role', 'option');
-      item.setAttribute('aria-selected', idx === S.activeSlideIndex ? 'true' : 'false');
+      item.setAttribute('role', 'listitem');
       item.setAttribute('aria-label', 'Slide ' + (idx + 1) + ': ' + slide.title);
       item.setAttribute('tabindex', idx === S.activeSlideIndex ? '0' : '-1');
 
       var img = document.createElement('img');
-      img.src = PP.getSlideImage(slide);
+      var imgSrc = PP.getSlideImage(slide);
+      if (imgSrc) {
+        img.src = imgSrc;
+      } else {
+        img.classList.add('slide-img-empty');
+      }
       img.alt = slide.title;
 
       var num = document.createElement('div');
@@ -252,9 +257,18 @@
   // ── Slide panel wiring ────────────────────────────────────────────────
 
   PP.wireSlidePanel = function () {
-    // "Add slide" button in slides panel header
+    // "Add slide" button in slides panel header — creates empty slide
     Utils.$('#add-slide-btn').addEventListener('click', function () {
-      Utils.$('#add-file-input').click();
+      if (PP.createEmptySlide) {
+        var slide = PP.createEmptySlide();
+        S.slides.push(slide);
+        S.activeSlideIndex = S.slides.length - 1;
+        PP.renderSlideList();
+        PP.loadActiveSlide();
+        if (PP.Buckets) PP.Buckets.render();
+        PP.updateCanvasNav();
+        PP.markDirty();
+      }
     });
 
     Utils.$('#add-file-input').addEventListener('change', async function (e) {
@@ -268,8 +282,17 @@
         s.tabletImageData = isTablet ? s.imageData : null;
       });
       var maxNew = 10 - S.slides.length;
-      S.slides.push.apply(S.slides, newSlides.slice(0, maxNew));
+      var toAdd = newSlides.slice(0, maxNew);
+      // Also add images to the active device's bucket
+      if (PP.Buckets) {
+        var bucketDev = S.activeDevice;
+        toAdd.forEach(function (s) {
+          PP.Buckets.addToBucket(bucketDev, { id: Utils.uid(), imageData: s.imageData, title: s.title || '' });
+        });
+      }
+      S.slides.push.apply(S.slides, toAdd);
       PP.renderSlideList();
+      if (PP.Buckets) PP.Buckets.render();
       PP.updateExportCounts();
       PP.markDirty();
     });

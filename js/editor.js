@@ -359,6 +359,13 @@ const Editor = {
     // Remove old phone image
     if (this.phoneImage) { this.phoneImage.dispose(); c.remove(this.phoneImage); this.phoneImage = null; }
 
+    // No image for this slide (empty slot) — just load the frame
+    if (!src) {
+      this._loadFrame();
+      c.renderAll();
+      return;
+    }
+
     fabric.Image.fromURL(
       src,
       (img) => {

@@ -60,7 +60,7 @@ const Exporter = {
 
       for (const [si, slide] of slides.entries()) {
         // Pick the right image for this device form factor
-        const imgSrc = (isTablet && slide.tabletImageData) ? slide.tabletImageData : slide.imageData;
+        const imgSrc = PP.getSlideImageForDevice(slide, device);
         const screenshotImg = await this._loadImage(imgSrc).catch(() => null);
 
         // Each slide carries its own design settings
@@ -198,8 +198,10 @@ const Exporter = {
         canvas.height = 0;
         return dataURL;
       } catch (_) {
-        // Canvas tainted (file:// frames) — return canvas element as fallback
-        return canvas;
+        // Canvas tainted (file:// frames) — return null; caller must handle gracefully
+        canvas.width = 0;
+        canvas.height = 0;
+        return null;
       }
     }
 
